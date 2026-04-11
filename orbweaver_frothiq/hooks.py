@@ -1,9 +1,9 @@
-app_name = "frothiq"
-app_title = "FrothIQ"
-app_publisher = "AGIIENT"
+app_name        = "orbweaver_frothiq"
+app_title = "OrbWeaver FrothIQ"
+app_publisher   = "OrbWeaver"
 app_description = "SEO Optimization & Insights Tool"
-app_email = "admin@agiient.com"
-app_license = "mit"
+app_email = "admin@orbweaver.dev"
+app_license     = "Proprietary"
 
 # Apps
 # ------------------

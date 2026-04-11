@@ -1,4 +1,10 @@
-### FrothIQ
+# OrbWeaver FrothIQ
+
+> **OrbWeaver** · [orbweaver.com](https://orbweaver.com)
+
+---
+
+Bar and beverage management tools built on Frappe.
 
 SEO Optimization & Insights Tool
 
