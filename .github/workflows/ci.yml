@@ -88,10 +88,10 @@ jobs:
       - name: Install
         working-directory: /home/runner/frappe-bench
         run: |
-          bench get-app frothiq $GITHUB_WORKSPACE
+          cp -r $GITHUB_WORKSPACE apps/orbweaver_frothiq
           bench setup requirements --dev
           bench new-site --db-root-password root --admin-password admin test_site
-          bench --site test_site install-app frothiq
+          bench --site test_site install-app orbweaver_frothiq
           bench build
         env:
           CI: 'Yes'
@@ -100,6 +100,6 @@ jobs:
         working-directory: /home/runner/frappe-bench
         run: |
           bench --site test_site set-config allow_tests true
-          bench --site test_site run-tests --app frothiq
+          bench --site test_site run-tests --app orbweaver_frothiq
         env:
           TYPE: server
