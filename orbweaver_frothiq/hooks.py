@@ -1,7 +1,7 @@
 app_name        = "orbweaver_frothiq"
 app_title = "OrbWeaver FrothIQ"
 app_publisher   = "OrbWeaver"
-app_description = "SEO Optimization & Insights Tool"
+app_description = "FrothIQ Security Dashboard for Frappe"
 app_email = "admin@orbweaver.dev"
 app_license     = "Proprietary"
 
@@ -132,13 +132,11 @@ app_license     = "Proprietary"
 # ---------------
 # Hook on document methods and events
 
-# doc_events = {
-# 	"*": {
-# 		"on_update": "method",
-# 		"on_cancel": "method",
-# 		"on_trash": "method"
-# 	}
-# }
+doc_events = {
+	"FrothIQ Log": {
+		"after_insert": "orbweaver_frothiq.frothiq.api.dashboard_api.notify_new_log"
+	}
+}
 
 # Scheduled Tasks
 # ---------------

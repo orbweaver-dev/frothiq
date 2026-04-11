@@ -1,0 +1,13 @@
+{
+ "doctype": "Page",
+ "name": "frothiq-dashboard",
+ "page_name": "frothiq-dashboard",
+ "title": "FrothIQ Security Dashboard",
+ "icon": "shield",
+ "module": "FrothIQ",
+ "system_page": 0,
+ "roles": [
+  {"role": "System Manager"},
+  {"role": "FrothIQ Analyst"}
+ ]
+}
