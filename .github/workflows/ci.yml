@@ -90,7 +90,7 @@ jobs:
         run: |
           cp -r $GITHUB_WORKSPACE apps/orbweaver_frothiq
           ./env/bin/pip install -e apps/orbweaver_frothiq
-          echo "orbweaver_frothiq" >> sites/apps.txt
+          printf "\norbweaver_frothiq\n" >> sites/apps.txt
           bench setup requirements --dev
           bench new-site --db-root-password root --admin-password admin test_site
           bench --site test_site install-app orbweaver_frothiq
