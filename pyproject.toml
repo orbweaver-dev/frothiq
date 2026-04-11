@@ -1,7 +1,7 @@
 [project]
 name = "orbweaver-frothiq"
 authors = [
-    { name = "AGIIENT", email = "admin@agiient.com"}
+    { name = "OrbWeaver", email = "admin@orbweaver.dev"}
 ]
 description = "SEO Optimization & Insights Tool"
 requires-python = ">=3.14"
