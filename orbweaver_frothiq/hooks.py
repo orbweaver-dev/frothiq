@@ -183,6 +183,9 @@ scheduler_events = {
 	"hourly": [
 		"orbweaver_frothiq.frothiq_portal.api.portal_api.sync_agent_status",
 	],
+	"daily": [
+		"orbweaver_frothiq.frothiq_portal.api.conversion_api.run_daily_conversion_check",
+	],
 }
 
 # Testing

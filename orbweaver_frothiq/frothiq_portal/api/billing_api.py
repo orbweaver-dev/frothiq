@@ -35,6 +35,9 @@ PLAN_LIMITS: dict[str, dict] = {
             "response_engine": False,
             "adaptive_scoring": True,
             "intel_market": False,
+            "defense_mesh": False,
+            "defense_mesh_auto_apply": False,
+            "policy_mesh": False,
         },
     },
     "pro": {
@@ -48,6 +51,9 @@ PLAN_LIMITS: dict[str, dict] = {
             "response_engine": False,
             "adaptive_scoring": True,
             "intel_market": True,
+            "defense_mesh": True,
+            "defense_mesh_auto_apply": False,
+            "policy_mesh": True,
         },
     },
     "enterprise": {
@@ -61,6 +67,9 @@ PLAN_LIMITS: dict[str, dict] = {
             "response_engine": True,
             "adaptive_scoring": True,
             "intel_market": True,
+            "defense_mesh": True,
+            "defense_mesh_auto_apply": True,
+            "policy_mesh": True,
         },
     },
 }
