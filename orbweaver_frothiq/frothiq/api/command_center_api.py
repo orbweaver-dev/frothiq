@@ -248,11 +248,14 @@ def get_ip_intelligence(ip):
 
 @frappe.whitelist()
 def block_ip(ip, reason="Manual block from FrothIQ Command Center", duration=3600):
-    """Admin-only: manually trigger a temporary block via frothiq-core."""
+    """Admin-only: manually add an IP to the blocklist via frothiq-core."""
     if not _is_admin():
         frappe.throw("FrothIQ Admin role required", frappe.PermissionError)
     ip = (ip or "").strip()
-    return _post("/response/unblock/" + ip.replace("/", ""), json=None)  # wrong — see below
+    try:
+        return _post("/response/block", json={"ip": ip, "reason": reason, "duration": int(duration)})
+    except Exception as e:
+        frappe.throw(str(e))
 
 
 @frappe.whitelist()
