@@ -18,6 +18,11 @@ from frappe.utils import add_to_date, now_datetime
 _FROTHIQ_CORE_URL = os.getenv("FROTHIQ_CORE_URL", "http://127.0.0.1:8001")
 _TIMEOUT = 8  # seconds
 
+# Route prefix constants — frothiq-core mounts all v2 routes under /api/v2/
+_V2    = "/api/v2"
+_INTEL = f"{_V2}/intelligence"    # campaigns, reputation, temporal, response/*
+_AGT   = f"{_V2}/agents"          # agent registry
+
 
 def _key():
     return frappe.conf.get("frothiq_api_key") or os.getenv("FROTHIQ_API_KEY", "")
@@ -105,13 +110,13 @@ def get_overview_stats(hours=24):
     campaign_count = 0
     core_status = "unknown"
     try:
-        camp_data = _get("/campaigns/summary")
+        camp_data = _get(f"{_INTEL}/campaigns/summary")
         campaign_count = camp_data.get("active_campaigns", 0)
     except Exception:
         pass
 
     try:
-        health = _get("/health")
+        health = _get(f"{_V2}/health")
         core_status = health.get("status", "unknown")
     except Exception:
         core_status = "unreachable"
@@ -196,23 +201,23 @@ def get_ip_intelligence(ip):
 
     # frothiq-core data
     try:
-        result["reputation"] = _get(f"/reputation/{ip}")
+        result["reputation"] = _get(f"{_INTEL}/reputation/{ip}")
     except Exception as e:
         result["reputation"] = {"error": str(e)}
 
     try:
-        result["adaptive"] = _get(f"/adaptive/{ip}")
+        result["adaptive"] = _get(f"{_INTEL}/adaptive-weights")
     except Exception as e:
         result["adaptive"] = {"error": str(e)}
 
     try:
-        result["temporal"] = _get(f"/temporal/{ip}")
+        result["temporal"] = _get(f"{_INTEL}/temporal/{ip}")
     except Exception as e:
         result["temporal"] = {"error": str(e)}
 
     try:
         # campaigns filtered to this IP
-        all_camps = _get("/campaigns/active")
+        all_camps = _get(f"{_INTEL}/campaigns/active")
         result["campaign"] = [
             c for c in all_camps
             if ip in (c.get("participating_ips") or [])
@@ -221,7 +226,7 @@ def get_ip_intelligence(ip):
         result["campaign"] = []
 
     try:
-        result["response_action"] = _get(f"/response/timeline?ip={ip}&limit=5")
+        result["response_action"] = _get(f"{_INTEL}/response/timeline", params={"ip": ip, "limit": 5})
     except Exception:
         result["response_action"] = []
 
@@ -253,7 +258,7 @@ def block_ip(ip, reason="Manual block from FrothIQ Command Center", duration=360
         frappe.throw("FrothIQ Admin role required", frappe.PermissionError)
     ip = (ip or "").strip()
     try:
-        return _post("/response/block", json={"ip": ip, "reason": reason, "duration": int(duration)})
+        return _post(f"{_INTEL}/response/block", json={"ip": ip, "reason": reason, "duration": int(duration)})
     except Exception as e:
         frappe.throw(str(e))
 
@@ -265,7 +270,7 @@ def unblock_ip(ip):
         frappe.throw("FrothIQ Admin role required", frappe.PermissionError)
     ip = (ip or "").strip()
     try:
-        return _post(f"/response/unblock/{ip}")
+        return _post(f"{_INTEL}/response/unblock/{ip}")
     except Exception as e:
         frappe.throw(str(e))
 
@@ -277,7 +282,7 @@ def trust_ip(ip):
         frappe.throw("FrothIQ Admin role required", frappe.PermissionError)
     ip = (ip or "").strip()
     try:
-        return _post("/response/trust", json={"ip": ip})
+        return _post(f"{_INTEL}/response/trust", json={"ip": ip})
     except Exception as e:
         frappe.throw(str(e))
 
@@ -289,7 +294,7 @@ def untrust_ip(ip):
         frappe.throw("FrothIQ Admin role required", frappe.PermissionError)
     ip = (ip or "").strip()
     try:
-        return _delete(f"/response/trust/{ip}")
+        return _delete(f"{_INTEL}/response/trust/{ip}")
     except Exception as e:
         frappe.throw(str(e))
 
@@ -303,9 +308,9 @@ def get_campaigns(status="active"):
     """Return all campaigns (active or archived)."""
     try:
         if status == "active":
-            return _get("/campaigns/active")
+            return _get(f"{_INTEL}/campaigns/active")
         else:
-            return _get("/campaigns")
+            return _get(f"{_INTEL}/campaigns")
     except Exception as e:
         return {"error": str(e), "campaigns": []}
 
@@ -314,7 +319,7 @@ def get_campaigns(status="active"):
 def get_campaign_detail(campaign_id):
     """Return full detail for a single campaign."""
     try:
-        return _get(f"/campaigns/{campaign_id}")
+        return _get(f"{_INTEL}/campaigns/{campaign_id}")
     except Exception as e:
         frappe.throw(str(e))
 
@@ -323,7 +328,7 @@ def get_campaign_detail(campaign_id):
 def get_campaigns_summary():
     """Return campaign summary counts."""
     try:
-        return _get("/campaigns/summary")
+        return _get(f"{_INTEL}/campaigns/summary")
     except Exception as e:
         return {"error": str(e)}
 
@@ -336,7 +341,7 @@ def get_campaigns_summary():
 def get_active_blocks():
     """Return currently active blocks from the response engine."""
     try:
-        return _get("/response/active-blocks")
+        return _get(f"{_INTEL}/response/active-blocks")
     except Exception as e:
         return {"error": str(e), "blocks": []}
 
@@ -345,7 +350,7 @@ def get_active_blocks():
 def get_response_summary():
     """Return response engine summary stats."""
     try:
-        return _get("/response/summary")
+        return _get(f"{_INTEL}/response/summary")
     except Exception as e:
         return {"error": str(e)}
 
@@ -357,7 +362,7 @@ def get_response_timeline(ip=None, limit=50):
     if ip:
         params["ip"] = ip
     try:
-        return _get("/response/timeline", params=params)
+        return _get(f"{_INTEL}/response/timeline", params=params)
     except Exception as e:
         return {"error": str(e), "timeline": []}
 
@@ -366,7 +371,7 @@ def get_response_timeline(ip=None, limit=50):
 def get_reversal_log(limit=20):
     """Return the block reversal log."""
     try:
-        return _get("/response/reversals", params={"limit": int(limit)})
+        return _get(f"{_INTEL}/response/reversals", params={"limit": int(limit)})
     except Exception as e:
         return {"error": str(e), "reversals": []}
 
@@ -385,7 +390,7 @@ def get_system_health():
     """
     health = {}
     try:
-        health = _get("/health")
+        health = _get(f"{_V2}/health")
     except Exception as e:
         health = {"status": "unreachable", "error": str(e)}
 
@@ -399,7 +404,7 @@ def get_system_health():
 def get_intelligence_stats():
     """Return intelligence engine statistics from frothiq-core."""
     try:
-        return _get("/stats")
+        return _get(f"{_V2}/capabilities")
     except Exception as e:
         return {"error": str(e)}
 
@@ -455,7 +460,7 @@ def get_agents(status_filter=None):
     Phase 8 visibility rule enforced by frothiq-core (admin key vs. tenant key).
     """
     try:
-        data = _get("/agents/agents")
+        data = _get(f"{_AGT}/agents")
         agents = data.get("agents", data) if isinstance(data, dict) else data
         if status_filter and status_filter != "all":
             agents = [a for a in agents if a.get("status") == status_filter]
@@ -468,7 +473,7 @@ def get_agents(status_filter=None):
 def get_agents_summary():
     """Return aggregate agent statistics (admin-only at core; returns what core allows)."""
     try:
-        return _get("/agents/summary")
+        return _get(f"{_AGT}/summary")
     except Exception as e:
         return {"error": str(e)}
 
@@ -480,7 +485,7 @@ def get_agent_detail(agent_id):
     The core /agents/agents list provides all fields; we filter client-side.
     """
     try:
-        data = _get("/agents/agents")
+        data = _get(f"{_AGT}/agents")
         agents = data.get("agents", data) if isinstance(data, dict) else data
         for a in agents:
             if a.get("agent_id") == agent_id:
