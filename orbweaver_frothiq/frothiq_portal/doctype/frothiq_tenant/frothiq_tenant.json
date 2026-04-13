@@ -17,7 +17,13 @@
   "subscription",
   "column_break_billing",
   "subscription_status",
-  "next_billing_date"
+  "next_billing_date",
+  "section_break_notifications",
+  "webhook_url",
+  "webhook_events",
+  "column_break_notifications",
+  "alert_email",
+  "alert_min_severity"
  ],
  "fields": [
   {
@@ -107,6 +113,44 @@
    "label": "Next Billing Date",
    "read_only": 1,
    "description": "Next invoice date from ERPNext Subscription"
+  },
+  {
+   "fieldname": "section_break_notifications",
+   "fieldtype": "Section Break",
+   "label": "Alert & Notification Settings",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "webhook_url",
+   "fieldtype": "Data",
+   "label": "Webhook URL",
+   "options": "URL",
+   "description": "HTTPS endpoint to receive alert payloads (Slack, custom, etc.)"
+  },
+  {
+   "fieldname": "webhook_events",
+   "fieldtype": "Data",
+   "label": "Webhook Event Types",
+   "description": "Comma-separated event types to forward (leave blank for all): attack, block, campaign, anomaly, system"
+  },
+  {
+   "fieldname": "column_break_notifications",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "alert_email",
+   "fieldtype": "Data",
+   "label": "Alert Email",
+   "options": "Email",
+   "description": "Override email for alert notifications (defaults to account owner email)"
+  },
+  {
+   "fieldname": "alert_min_severity",
+   "fieldtype": "Select",
+   "label": "Minimum Alert Severity",
+   "options": "low\nmedium\nhigh\ncritical",
+   "default": "high",
+   "description": "Only generate alerts at or above this severity level"
   }
  ],
  "links": [],

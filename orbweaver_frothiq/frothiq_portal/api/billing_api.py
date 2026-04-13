@@ -298,6 +298,111 @@ def sync_tenants_to_core():
 
 
 # ---------------------------------------------------------------------------
+# Scheduled job — sync security events from frothiq-core every minute
+# ---------------------------------------------------------------------------
+
+@frappe.whitelist()
+def sync_events_from_core():
+    """
+    Scheduled task (every minute via cron).
+
+    Pulls recent security events from /api/v2/internal/events, deduplicates
+    using the 'since' cursor stored in Frappe cache, and inserts FrothIQ Event
+    documents for each tenant.
+
+    Global events (no tenant_id) are broadcast to all active tenants.
+    Tenant-scoped events (tenant_id present) go only to that tenant.
+    Suppression (dedup + per-IP hourly cap) is enforced in the DocType controller.
+    """
+    admin_key = _core_admin_key()
+    if not admin_key:
+        return
+
+    # Read the last-sync cursor from cache (unix timestamp)
+    since_key = "fq_events_since"
+    since = frappe.cache().get(since_key)
+    since = float(since) if since else 0.0
+
+    try:
+        resp = _requests.get(
+            f"{_FROTHIQ_CORE_URL}/api/v2/internal/events",
+            headers={"X-FrothIQ-Key": admin_key},
+            params={"since": since, "limit": 500},
+            timeout=_TIMEOUT,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception as exc:
+        frappe.log_error(f"sync_events_from_core fetch failed: {exc}", "FrothIQ Event Sync")
+        return
+
+    events = data.get("events") or []
+    if not events:
+        return
+
+    # Build tenant list once (for broadcast events)
+    active_tenants = frappe.get_all(
+        "FrothIQ Tenant",
+        filters={"status": ["in", ["active", "trial"]]},
+        pluck="name",
+    )
+
+    inserted = 0
+    newest_ts = since
+
+    for ev in events:
+        ev_ts = ev.get("timestamp") or 0.0
+        if ev_ts > newest_ts:
+            newest_ts = ev_ts
+
+        # Determine target tenant(s)
+        tenant_id = ev.get("tenant_id")
+        if tenant_id:
+            targets = [tenant_id] if frappe.db.exists("FrothIQ Tenant", tenant_id) else []
+        else:
+            targets = active_tenants
+
+        for tid in targets:
+            try:
+                from frappe.utils import get_datetime
+                ts_val = get_datetime(ev_ts) if ev_ts else frappe.utils.now_datetime()
+
+                doc = frappe.new_doc("FrothIQ Event")
+                doc.timestamp = ts_val
+                doc.tenant = tid
+                doc.site = ev.get("site") or None
+                doc.event_type = ev.get("event_type", "attack")
+                doc.severity = ev.get("severity", "low")
+                doc.score = int(ev.get("score") or 0)
+                doc.ip_address = ev.get("ip_address") or ""
+                doc.campaign_id = ev.get("campaign_id") or ""
+                doc.source = ev.get("source") or "core"
+                doc.raw_payload = frappe.as_json(ev.get("metadata") or {})
+                doc.flags.ignore_permissions = True
+                doc.insert(ignore_permissions=True)
+                inserted += 1
+            except frappe.DuplicateEntryError:
+                pass  # suppressed by dedup hash
+            except frappe.ValidationError:
+                pass  # suppressed by hourly cap
+            except Exception as exc:
+                frappe.logger("frothiq_billing").debug(
+                    "sync_events: insert failed for tenant=%s: %s", tid, exc
+                )
+
+    frappe.db.commit()
+
+    # Advance the cursor so next run fetches only new events
+    if newest_ts > since:
+        frappe.cache().set(since_key, str(newest_ts), expires_in_sec=86400)
+
+    frappe.logger("frothiq_billing").info(
+        "sync_events_from_core: fetched %d events, inserted %d FrothIQ Event docs",
+        len(events), inserted,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
 

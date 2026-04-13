@@ -598,6 +598,151 @@ def has_api_key_permission(doc, ptype="read", user=None):
     return doc.tenant == tenant
 
 
+def get_event_query(user=None):
+    user = user or frappe.session.user
+    if _is_admin(user):
+        return ""
+    tenant = frappe.db.get_value("FrothIQ Tenant", {"account_owner": user}, "name")
+    if not tenant:
+        return "`tabFrothIQ Event`.`name` = '__no_access__'"
+    return f"`tabFrothIQ Event`.`tenant` = {frappe.db.escape(tenant)}"
+
+
+def has_event_permission(doc, ptype="read", user=None):
+    user = user or frappe.session.user
+    if _is_admin(user):
+        return True
+    tenant = frappe.db.get_value("FrothIQ Tenant", {"account_owner": user}, "name")
+    return doc.tenant == tenant
+
+
+# ---------------------------------------------------------------------------
+# 10. Alert Events — read-only API for portal dashboard
+# ---------------------------------------------------------------------------
+
+@frappe.whitelist()
+def get_events(severity=None, event_type=None, limit=50):
+    """
+    Return recent FrothIQ Events for the current tenant.
+
+    Filters:
+      severity   — low | medium | high | critical (optional)
+      event_type — attack | block | campaign | anomaly | system (optional)
+      limit      — max rows (default 50, max 200)
+    """
+    tenant = _get_my_tenant()
+    try:
+        limit = min(int(limit), 200)
+    except (TypeError, ValueError):
+        limit = 50
+
+    filters = {"tenant": tenant.name}
+    if severity:
+        filters["severity"] = severity
+    if event_type:
+        filters["event_type"] = event_type
+
+    events = frappe.get_all(
+        "FrothIQ Event",
+        filters=filters,
+        fields=[
+            "name", "timestamp", "event_type", "severity", "score",
+            "ip_address", "campaign_id", "site", "source",
+        ],
+        order_by="timestamp desc",
+        limit=limit,
+    )
+    return {"tenant": tenant.name, "events": events, "count": len(events)}
+
+
+# ---------------------------------------------------------------------------
+# 11. Notification Settings
+# ---------------------------------------------------------------------------
+
+@frappe.whitelist()
+def get_notification_settings():
+    """Return the current tenant's notification preferences."""
+    tenant = _get_my_tenant()
+    return {
+        "tenant": tenant.name,
+        "webhook_url": getattr(tenant, "webhook_url", "") or "",
+        "webhook_events": getattr(tenant, "webhook_events", "") or "",
+        "alert_email": getattr(tenant, "alert_email", "") or "",
+        "alert_min_severity": getattr(tenant, "alert_min_severity", "high") or "high",
+    }
+
+
+@frappe.whitelist()
+def save_notification_settings(webhook_url=None, webhook_events=None,
+                                alert_email=None, alert_min_severity=None):
+    """Save notification preferences for the current tenant."""
+    _require_customer_admin()
+    tenant = _get_my_tenant()
+
+    if webhook_url is not None:
+        # Basic URL validation — must be https or empty
+        webhook_url = webhook_url.strip()
+        if webhook_url and not webhook_url.startswith("https://"):
+            frappe.throw("Webhook URL must start with https://")
+        tenant.db_set("webhook_url", webhook_url, update_modified=False)
+
+    if webhook_events is not None:
+        tenant.db_set("webhook_events", webhook_events.strip(), update_modified=False)
+
+    if alert_email is not None:
+        tenant.db_set("alert_email", alert_email.strip(), update_modified=False)
+
+    if alert_min_severity is not None:
+        valid = {"low", "medium", "high", "critical"}
+        if alert_min_severity not in valid:
+            frappe.throw(f"Invalid severity. Must be one of: {', '.join(sorted(valid))}")
+        tenant.db_set("alert_min_severity", alert_min_severity, update_modified=False)
+
+    frappe.db.commit()
+    return {"saved": True}
+
+
+@frappe.whitelist()
+def send_test_alert():
+    """
+    Send a synthetic FrothIQ Event for the current tenant.
+
+    Creates a test event document so the full alerting pipeline
+    (realtime, webhook) fires without waiting for a real threat.
+    """
+    _require_customer_admin()
+    tenant = _get_my_tenant()
+
+    # Remove any cached dedup hash so the test always goes through
+    import hashlib
+    import math
+    from frappe.utils import now_datetime, get_datetime
+    ts = now_datetime()
+    unix_ts = get_datetime(str(ts)).timestamp()
+    bucket = math.floor(unix_ts / 300)
+    raw = f"{tenant.name}:TEST_ALERT:system:{bucket}"
+    test_hash = hashlib.sha256(raw.encode()).hexdigest()[:32]
+    try:
+        frappe.cache().delete_value(f"fq_alert:{test_hash}")
+    except Exception:
+        pass
+
+    doc = frappe.new_doc("FrothIQ Event")
+    doc.timestamp = ts
+    doc.tenant = tenant.name
+    doc.event_type = "system"
+    doc.severity = "medium"
+    doc.score = 50
+    doc.ip_address = "TEST_ALERT"
+    doc.source = "core"
+    doc.raw_payload = '{"test": true}'
+    doc.flags.ignore_permissions = True
+    doc.insert(ignore_permissions=True)
+    frappe.db.commit()
+
+    return {"sent": True, "event_name": doc.name}
+
+
 # ---------------------------------------------------------------------------
 # Private utilities
 # ---------------------------------------------------------------------------

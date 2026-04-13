@@ -88,6 +88,32 @@ frappe.ui.form.on("FrothIQ Tenant", {
                 });
             }, __("Tools"));
         }
+
+        // "Test Alert" — sends a synthetic event through the full alerting pipeline
+        if (frappe.user_roles.includes("FrothIQ Customer Admin") ||
+            frappe.user_roles.includes("System Manager") ||
+            frappe.user_roles.includes("FrothIQ Admin")) {
+            frm.add_custom_button(__("Test Alert"), function () {
+                frappe.call({
+                    method: "orbweaver_frothiq.frothiq_portal.api.portal_api.send_test_alert",
+                    callback(r) {
+                        if (r.message && r.message.sent) {
+                            frappe.show_alert({
+                                message: __("Test alert sent ({0})", [r.message.event_name]),
+                                indicator: "blue",
+                            }, 5);
+                        }
+                    },
+                });
+            }, __("Alerts"));
+        }
+
+        // "View Alerts" — navigate to the FrothIQ Event list for this tenant
+        if (!frm.is_new()) {
+            frm.add_custom_button(__("View Alerts"), function () {
+                frappe.set_route("List", "FrothIQ Event", { tenant: frm.docname });
+            }, __("Alerts"));
+        }
     },
 
     // -----------------------------------------------------------------

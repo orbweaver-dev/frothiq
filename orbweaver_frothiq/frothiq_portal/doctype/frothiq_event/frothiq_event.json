@@ -1,0 +1,194 @@
+{
+ "actions": [],
+ "autoname": "FEV-.YYYY.-.#####",
+ "creation": "2026-04-13 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "timestamp",
+  "tenant",
+  "column_break_top",
+  "site",
+  "source",
+  "section_break_event",
+  "event_type",
+  "severity",
+  "column_break_event",
+  "score",
+  "campaign_id",
+  "section_break_subject",
+  "ip_address",
+  "notification_email",
+  "section_break_dedup",
+  "dedup_hash",
+  "section_break_payload",
+  "raw_payload"
+ ],
+ "fields": [
+  {
+   "fieldname": "timestamp",
+   "fieldtype": "Datetime",
+   "label": "Timestamp",
+   "reqd": 1,
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "tenant",
+   "fieldtype": "Link",
+   "label": "Tenant",
+   "options": "FrothIQ Tenant",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "column_break_top",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "site",
+   "fieldtype": "Link",
+   "label": "Site",
+   "options": "FrothIQ Tenant Site",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "source",
+   "fieldtype": "Select",
+   "label": "Source",
+   "options": "agent\ncore\nfederation",
+   "default": "core",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "section_break_event",
+   "fieldtype": "Section Break",
+   "label": "Event Details"
+  },
+  {
+   "fieldname": "event_type",
+   "fieldtype": "Select",
+   "label": "Event Type",
+   "options": "attack\nblock\ncampaign\nanomaly\nsystem",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "severity",
+   "fieldtype": "Select",
+   "label": "Severity",
+   "options": "low\nmedium\nhigh\ncritical",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "column_break_event",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "score",
+   "fieldtype": "Int",
+   "label": "Threat Score",
+   "default": "0",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "campaign_id",
+   "fieldtype": "Data",
+   "label": "Campaign ID",
+   "description": "Populated for campaign-type events"
+  },
+  {
+   "fieldname": "section_break_subject",
+   "fieldtype": "Section Break",
+   "label": "Subject"
+  },
+  {
+   "fieldname": "ip_address",
+   "fieldtype": "Data",
+   "label": "IP Address",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "notification_email",
+   "fieldtype": "Data",
+   "label": "Notification Email",
+   "options": "Email",
+   "fetch_from": "tenant.account_owner",
+   "read_only": 1,
+   "description": "Fetched from Tenant account owner — used by Frappe Notification engine"
+  },
+  {
+   "fieldname": "section_break_dedup",
+   "fieldtype": "Section Break",
+   "label": "Deduplication",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "dedup_hash",
+   "fieldtype": "Data",
+   "label": "Dedup Hash",
+   "read_only": 1,
+   "description": "SHA-256 of tenant+ip+event_type+5-min bucket — prevents duplicate alerts"
+  },
+  {
+   "fieldname": "section_break_payload",
+   "fieldtype": "Section Break",
+   "label": "Raw Payload",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "raw_payload",
+   "fieldtype": "Long Text",
+   "label": "Raw Payload",
+   "read_only": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-04-13 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "FrothIQ Portal",
+ "name": "FrothIQ Event",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "FrothIQ Admin",
+   "write": 1
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "role": "FrothIQ Customer Admin"
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "FrothIQ Customer Viewer"
+  }
+ ],
+ "sort_field": "timestamp",
+ "sort_order": "DESC",
+ "track_changes": 0,
+ "read_only": 1
+}

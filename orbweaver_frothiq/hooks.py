@@ -127,6 +127,7 @@ permission_query_conditions = {
 	"FrothIQ Tenant Site":    f"{_portal}.get_tenant_site_query",
 	"FrothIQ Usage Snapshot": f"{_portal}.get_usage_snapshot_query",
 	"FrothIQ API Key":        f"{_portal}.get_api_key_query",
+	"FrothIQ Event":          f"{_portal}.get_event_query",
 }
 
 has_permission = {
@@ -134,6 +135,7 @@ has_permission = {
 	"FrothIQ Tenant Site":    f"{_portal}.has_tenant_site_permission",
 	"FrothIQ Usage Snapshot": f"{_portal}.has_usage_snapshot_permission",
 	"FrothIQ API Key":        f"{_portal}.has_api_key_permission",
+	"FrothIQ Event":          f"{_portal}.has_event_permission",
 }
 
 # Document Events
@@ -171,6 +173,9 @@ fixtures = [
 
 scheduler_events = {
 	"cron": {
+		"* * * * *": [
+			"orbweaver_frothiq.frothiq_portal.api.billing_api.sync_events_from_core",
+		],
 		"*/5 * * * *": [
 			"orbweaver_frothiq.frothiq_portal.api.billing_api.sync_tenants_to_core",
 		],
