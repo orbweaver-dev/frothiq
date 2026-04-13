@@ -1,0 +1,21 @@
+{
+ "app": "orbweaver_frothiq",
+ "bg_color": "gray",
+ "creation": "2026-04-13 16:52:37.206376",
+ "docstatus": 0,
+ "doctype": "Desktop Icon",
+ "hidden": 0,
+ "icon": "shield",
+ "icon_type": "Link",
+ "idx": 1,
+ "label": "FrothIQ",
+ "link_to": "FrothIQ",
+ "link_type": "Workspace Sidebar",
+ "modified": "2026-04-13 16:52:37.206376",
+ "modified_by": "Administrator",
+ "name": "FrothIQ",
+ "owner": "Administrator",
+ "restrict_removal": 0,
+ "roles": [],
+ "standard": 1
+}

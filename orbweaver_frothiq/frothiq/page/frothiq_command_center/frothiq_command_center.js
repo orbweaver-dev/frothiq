@@ -209,6 +209,16 @@ function _fmt_ts(ts) {
 	return frappe.datetime.str_to_user(ts);
 }
 
+function _fmt_uptime(seconds) {
+	if (!seconds && seconds !== 0) return "—";
+	const d = Math.floor(seconds / 86400);
+	const h = Math.floor((seconds % 86400) / 3600);
+	const m = Math.floor((seconds % 3600) / 60);
+	if (d > 0) return `${d}d ${h}h ${m}m`;
+	if (h > 0) return `${h}h ${m}m`;
+	return `${m}m ${seconds % 60}s`;
+}
+
 function _ttl(expires_at) {
 	if (!expires_at) return "permanent";
 	const rem = Math.round(expires_at - Date.now() / 1000);
@@ -959,7 +969,7 @@ class FrothIQCommandCenter {
 				<div class="fiq-health-item">
 					<div class="fiq-health-icon">⏱️</div>
 					<div class="fiq-health-label">Uptime</div>
-					<div class="fiq-health-value">${h.uptime_seconds ? Math.round(h.uptime_seconds / 3600) + "h" : "—"}</div>
+					<div class="fiq-health-value">${_fmt_uptime(h.uptime_seconds)}</div>
 				</div>
 				${h.site ? `<div class="fiq-health-item">
 					<div class="fiq-health-icon">🏠</div>
@@ -984,9 +994,30 @@ class FrothIQCommandCenter {
 			const $el = $s.find("#fiq-intel-stats");
 			const entries = Object.entries(stats).filter(([k]) => !["error"].includes(k));
 			if (!entries.length) return;
+
+			const _fmt_val = (v) => {
+				if (v === null || v === undefined) return "—";
+				if (typeof v === "boolean") return v ? "✓ Yes" : "✗ No";
+				if (typeof v === "object") return null; // render as sub-section
+				return v;
+			};
+
+			let rows = "";
+			for (const [k, v] of entries) {
+				const label = k.replace(/_/g, " ");
+				if (typeof v === "object" && v !== null) {
+					rows += `<div class="fiq-kv-section-title" style="margin-top:8px;font-weight:600;font-size:11px;text-transform:uppercase;color:var(--text-muted)">${label}</div>`;
+					for (const [fk, fv] of Object.entries(v)) {
+						rows += this._kv(fk.replace(/_/g, " "), _fmt_val(fv));
+					}
+				} else {
+					rows += this._kv(label, _fmt_val(v));
+				}
+			}
+
 			$el.html(`<div class="fiq-card">
 				<div class="fiq-card-title">Intelligence Engine Stats</div>
-				${entries.map(([k, v]) => this._kv(k.replace(/_/g, " "), v)).join("")}
+				${rows}
 			</div>`);
 		});
 	}

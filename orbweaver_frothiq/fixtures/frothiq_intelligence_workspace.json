@@ -9,7 +9,8 @@
   "icon": "globe",
   "type": "Module",
   "is_hidden": 0,
-  "restrict_to_domain": "",
+  "public": 1,
+  "restrict_to_domain": null,
   "roles": [
    {"role": "FrothIQ Customer Admin"},
    {"role": "FrothIQ Customer Viewer"},
