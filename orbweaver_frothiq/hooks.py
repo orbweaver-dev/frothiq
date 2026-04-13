@@ -26,7 +26,7 @@ app_license     = "Proprietary"
 
 # include js, css files in header of desk.html
 # app_include_css = "/assets/frothiq/css/frothiq.css"
-# app_include_js = "/assets/frothiq/js/frothiq.js"
+app_include_js = "/assets/orbweaver_frothiq/js/simulation_ui_extension.js"
 
 # include js, css files in header of web template
 # web_include_css = "/assets/frothiq/css/frothiq.css"
@@ -185,6 +185,7 @@ scheduler_events = {
 	],
 	"daily": [
 		"orbweaver_frothiq.frothiq_portal.api.conversion_api.run_daily_conversion_check",
+		"orbweaver_frothiq.frothiq_portal.api.simulation_api.run_nightly_simulation_check",
 	],
 }
 
