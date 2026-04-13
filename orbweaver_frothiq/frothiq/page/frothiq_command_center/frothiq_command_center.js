@@ -255,6 +255,7 @@ class FrothIQCommandCenter {
 			{ id: "ip",        label: "IP Intel" },
 			{ id: "campaigns", label: "Campaigns" },
 			{ id: "response",  label: "Response Engine" },
+			{ id: "agents",    label: "Agents" },
 			{ id: "health",    label: "System Health" },
 		];
 
@@ -297,6 +298,7 @@ class FrothIQCommandCenter {
 			ip:        () => this._render_ip(),
 			campaigns: () => this._render_campaigns(),
 			response:  () => this._render_response(),
+			agents:    () => this._render_agents(),
 			health:    () => this._render_health(),
 		}[id];
 		if (fn) fn();
@@ -320,9 +322,10 @@ class FrothIQCommandCenter {
 	_start_poll() {
 		this._stop_poll();
 		this._poll_timer = setInterval(() => {
-			if (this._active_tab === "feed") this._poll_feed();
+			if (this._active_tab === "feed")    this._poll_feed();
 			if (this._active_tab === "overview") this._poll_overview();
-		}, 5000);
+			if (this._active_tab === "agents")   this._load_agents();
+		}, 10000);
 	}
 
 	_stop_poll() {
@@ -344,6 +347,13 @@ class FrothIQCommandCenter {
 		});
 		frappe.realtime.on("frothiq_campaign_update", (msg) => {
 			if (this._active_tab === "campaigns") this._render_campaigns();
+		});
+		frappe.realtime.on("frothiq_agent_update", (msg) => {
+			if (this._active_tab === "agents") this._load_agents();
+			frappe.show_alert({
+				message: `Agent ${msg.agent_type}: ${msg.agent_id} → ${msg.status}`,
+				indicator: msg.status === "online" ? "green" : "orange",
+			}, 4);
 		});
 	}
 
@@ -979,5 +989,173 @@ class FrothIQCommandCenter {
 				${entries.map(([k, v]) => this._kv(k.replace(/_/g, " "), v)).join("")}
 			</div>`);
 		});
+	}
+
+	// =========================================================================
+	// SECTION 7 — Agents Overview (Phase 7)
+	// =========================================================================
+
+	_render_agents() {
+		const $s = this._sections.agents;
+		$s.html(`<div class="fiq-toolbar">
+			<span class="fiq-title">Connected Agents</span>
+			<select class="fiq-select" id="fiq-agent-filter">
+				<option value="all">All Statuses</option>
+				<option value="online">Online</option>
+				<option value="stale">Stale</option>
+				<option value="offline">Offline</option>
+			</select>
+			<button class="fiq-btn primary" id="fiq-agent-refresh">Refresh</button>
+		</div>
+		<div id="fiq-agent-summary" style="margin-bottom:16px"></div>
+		<div id="fiq-agent-list"></div>`);
+
+		$s.find("#fiq-agent-refresh").on("click", () => this._load_agents());
+		$s.find("#fiq-agent-filter").on("change", () => this._load_agents());
+		this._load_agents();
+	}
+
+	_load_agents() {
+		const $s = this._sections.agents;
+		if (!$s.hasClass("active")) return;
+		const status_filter = $s.find("#fiq-agent-filter").val() || "all";
+
+		// Summary cards
+		_call("get_agents_summary", {}, (sum) => {
+			if (!sum || sum.error) return;
+			const by_type = sum.by_type || {};
+			const by_status = sum.by_status || {};
+
+			$s.find("#fiq-agent-summary").html(`
+				<div class="fiq-stats" style="grid-template-columns:repeat(5,1fr)">
+					<div class="fiq-stat">
+						<div class="fiq-stat-label">Total Agents</div>
+						<div class="fiq-stat-value">${sum.total_agents || 0}</div>
+					</div>
+					<div class="fiq-stat success">
+						<div class="fiq-stat-label">Online</div>
+						<div class="fiq-stat-value">${by_status.online || 0}</div>
+					</div>
+					<div class="fiq-stat warning">
+						<div class="fiq-stat-label">Stale / Lost</div>
+						<div class="fiq-stat-value">${(by_status.stale || 0) + (by_status.lost || 0)}</div>
+					</div>
+					<div class="fiq-stat">
+						<div class="fiq-stat-label">WordPress</div>
+						<div class="fiq-stat-value">${by_type.wordpress || 0}</div>
+					</div>
+					<div class="fiq-stat">
+						<div class="fiq-stat-label">Frappe</div>
+						<div class="fiq-stat-value">${by_type.frappe || 0}</div>
+					</div>
+				</div>
+				<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
+					${Object.entries(sum.version_distribution || {}).map(([v, c]) =>
+						`<span class="fiq-badge info">v${v}: ${c}</span>`
+					).join("")}
+				</div>
+			`);
+		});
+
+		// Agent list
+		_call("get_agents", { status_filter }, (data) => {
+			const agents = data?.agents || [];
+			const $list = $s.find("#fiq-agent-list");
+
+			if (!agents.length) {
+				$list.html(`<div class="fiq-empty">No agents registered. Deploy a FrothIQ plugin to a WordPress or Frappe site to see it here.</div>`);
+				return;
+			}
+
+			$list.html(`<div class="fiq-table-wrap">
+				<table class="fiq-table">
+					<thead><tr>
+						<th>Agent ID</th><th>Type</th><th>Version</th><th>Hostname</th>
+						<th>Status</th><th>Last Seen</th>
+						<th>Requests</th><th>Blocks</th><th>Events</th>
+						<th>Capabilities</th>
+					</tr></thead>
+					<tbody id="fiq-agent-tbody"></tbody>
+				</table>
+			</div>`);
+
+			$list.find("#fiq-agent-tbody").html(
+				agents.map(a => this._agent_row_html(a)).join("")
+			);
+
+			// Click → detail modal
+			$list.find("tr.clickable").off("click").on("click", (e) => {
+				const id = $(e.currentTarget).data("agent-id");
+				this._show_agent_modal(id, agents);
+			});
+		});
+	}
+
+	_agent_row_html(a) {
+		const status_cls = {online: "active", stale: "medium", lost: "high", offline: "critical"}[a.status] || "info";
+		const type_icon  = {wordpress: "🌐", frappe: "🔧", joomla: "🧩", linux: "🖥️"}[a.agent_type] || "❓";
+		const caps = a.capabilities || {};
+		const cap_badges = [
+			caps.csf_integration   && `<span class="fiq-badge info">CSF</span>`,
+			caps.wp_hooks          && `<span class="fiq-badge info">WP</span>`,
+			caps.frappe_hooks      && `<span class="fiq-badge info">Frappe</span>`,
+			caps.local_firewall    && `<span class="fiq-badge info">Firewall</span>`,
+			caps.apply_actions     && `<span class="fiq-badge low">Apply</span>`,
+		].filter(Boolean).join(" ");
+
+		const age = a.last_seen ? Math.round((Date.now() / 1000) - a.last_seen) : null;
+		const age_str = age == null ? "—" : age < 60 ? `${age}s ago` : age < 3600 ? `${Math.round(age/60)}m ago` : `${Math.round(age/3600)}h ago`;
+
+		return `<tr class="clickable" data-agent-id="${a.agent_id}">
+			<td><code style="font-size:.76rem">${a.agent_id}</code></td>
+			<td>${type_icon} ${a.agent_type}</td>
+			<td style="font-size:.78rem">${a.version || "—"}</td>
+			<td style="font-size:.76rem;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${a.hostname||""}">${a.hostname || "—"}</td>
+			<td><span class="fiq-badge ${status_cls}">${a.status}</span></td>
+			<td style="font-size:.76rem;white-space:nowrap">${age_str}</td>
+			<td>${(a.requests_total || 0).toLocaleString()}</td>
+			<td style="color:${a.blocks_total>0?'#ef4444':'inherit'}">${(a.blocks_total || 0).toLocaleString()}</td>
+			<td>${(a.events_reported || 0).toLocaleString()}</td>
+			<td>${cap_badges || "—"}</td>
+		</tr>`;
+	}
+
+	_show_agent_modal(agent_id, agents) {
+		const a = agents.find(x => x.agent_id === agent_id);
+		if (!a) return;
+		const type_icon = {wordpress: "🌐", frappe: "🔧", joomla: "🧩", linux: "🖥️"}[a.agent_type] || "❓";
+		const caps = a.capabilities || {};
+
+		const $modal = $(`<div class="fiq-modal-backdrop">
+			<div class="fiq-modal">
+				<button class="fiq-modal-close">&times;</button>
+				<h4 style="margin:0 0 6px">${type_icon} ${a.agent_type} Agent</h4>
+				<code style="font-size:.78rem;color:var(--text-muted)">${a.agent_id}</code>
+				<div style="margin-top:14px">
+					${this._kv("Hostname",       a.hostname || "—")}
+					${this._kv("Version",        a.version || "—")}
+					${this._kv("Tenant",         a.tenant_id || "—")}
+					${this._kv("Protocol",       "v1.0")}
+					${this._kv("Status",         `<span class="fiq-badge ${a.status === 'online' ? 'active' : 'high'}">${a.status}</span>`)}
+					${this._kv("Registered",     _fmt_ts(a.registered_at))}
+					${this._kv("Last Seen",      _fmt_ts(a.last_seen))}
+					<div style="margin:12px 0 4px;font-weight:600;font-size:.8rem;color:var(--text-muted);text-transform:uppercase">Traffic</div>
+					${this._kv("Requests Total", (a.requests_total || 0).toLocaleString())}
+					${this._kv("Blocks Total",   (a.blocks_total || 0).toLocaleString())}
+					${this._kv("Events Reported", (a.events_reported || 0).toLocaleString())}
+					${this._kv("Actions Applied", (a.actions_applied || 0).toLocaleString())}
+					${this._kv("Requests/min",   a.requests_1m || 0)}
+					${this._kv("Blocks/min",     a.blocks_1m || 0)}
+					<div style="margin:12px 0 4px;font-weight:600;font-size:.8rem;color:var(--text-muted);text-transform:uppercase">Capabilities</div>
+					${Object.entries(caps).map(([k, v]) =>
+						`<div class="fiq-kv"><span class="fiq-kv-key">${k.replace(/_/g, " ")}</span>
+						<span class="fiq-kv-val">${v ? '<span class="fiq-badge low">Yes</span>' : '<span class="fiq-badge critical">No</span>'}</span></div>`
+					).join("")}
+				</div>
+			</div>
+		</div>`);
+		$modal.find(".fiq-modal-close").on("click", () => $modal.remove());
+		$modal.on("click", (e) => { if ($(e.target).hasClass("fiq-modal-backdrop")) $modal.remove(); });
+		$("body").append($modal);
 	}
 }

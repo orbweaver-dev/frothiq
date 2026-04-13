@@ -438,3 +438,69 @@ def notify_campaign_update(campaign_id: str, campaign_type: str, confidence: int
         )
     except Exception:
         pass
+
+
+# ---------------------------------------------------------------------------
+# Section 7 — Agents Overview (Phase 7)
+# ---------------------------------------------------------------------------
+
+@frappe.whitelist()
+def get_agents(status_filter=None):
+    """
+    Return all registered FrothIQ agents visible to this user.
+
+    OrbWeaver Admin / System Manager → all agents (cross-tenant).
+    FrothIQ Analyst → own tenant agents only.
+
+    Phase 8 visibility rule enforced by frothiq-core (admin key vs. tenant key).
+    """
+    try:
+        data = _get("/agents/agents")
+        agents = data.get("agents", data) if isinstance(data, dict) else data
+        if status_filter and status_filter != "all":
+            agents = [a for a in agents if a.get("status") == status_filter]
+        return {"agents": agents, "count": len(agents)}
+    except Exception as e:
+        return {"error": str(e), "agents": [], "count": 0}
+
+
+@frappe.whitelist()
+def get_agents_summary():
+    """Return aggregate agent statistics (admin-only at core; returns what core allows)."""
+    try:
+        return _get("/agents/summary")
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@frappe.whitelist()
+def get_agent_detail(agent_id):
+    """
+    Return detail for a single agent — its metrics, capabilities, and recent activity.
+    The core /agents/agents list provides all fields; we filter client-side.
+    """
+    try:
+        data = _get("/agents/agents")
+        agents = data.get("agents", data) if isinstance(data, dict) else data
+        for a in agents:
+            if a.get("agent_id") == agent_id:
+                return a
+        frappe.throw(f"Agent {agent_id!r} not found")
+    except Exception as e:
+        frappe.throw(str(e))
+
+
+def notify_agent_update(agent_id: str, agent_type: str, status: str):
+    """Publish a realtime event when an agent comes online or goes offline."""
+    try:
+        frappe.publish_realtime(
+            event="frothiq_agent_update",
+            message={
+                "agent_id":   agent_id,
+                "agent_type": agent_type,
+                "status":     status,
+            },
+            after_commit=True,
+        )
+    except Exception:
+        pass
