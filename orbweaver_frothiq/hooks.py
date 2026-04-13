@@ -120,13 +120,21 @@ app_license     = "Proprietary"
 # -----------
 # Permissions evaluated in scripted ways
 
-# permission_query_conditions = {
-# 	"Event": "frappe.desk.doctype.event.event.get_permission_query_conditions",
-# }
-#
-# has_permission = {
-# 	"Event": "frappe.desk.doctype.event.event.has_permission",
-# }
+_portal = "orbweaver_frothiq.frothiq_portal.api.portal_api"
+
+permission_query_conditions = {
+	"FrothIQ Tenant":         f"{_portal}.get_tenant_query",
+	"FrothIQ Tenant Site":    f"{_portal}.get_tenant_site_query",
+	"FrothIQ Usage Snapshot": f"{_portal}.get_usage_snapshot_query",
+	"FrothIQ API Key":        f"{_portal}.get_api_key_query",
+}
+
+has_permission = {
+	"FrothIQ Tenant":         f"{_portal}.has_tenant_permission",
+	"FrothIQ Tenant Site":    f"{_portal}.has_tenant_site_permission",
+	"FrothIQ Usage Snapshot": f"{_portal}.has_usage_snapshot_permission",
+	"FrothIQ API Key":        f"{_portal}.has_api_key_permission",
+}
 
 # Document Events
 # ---------------
@@ -140,29 +148,32 @@ doc_events = {
 
 # Fixtures — roles and workspace shipped with the app
 fixtures = [
-	{"dt": "Role", "filters": [["role_name", "in", ["FrothIQ Analyst", "FrothIQ Admin"]]]},
+	{
+		"dt": "Role",
+		"filters": [["role_name", "in", [
+			"FrothIQ Analyst",
+			"FrothIQ Admin",
+			"FrothIQ Customer Admin",
+			"FrothIQ Customer Viewer",
+		]]],
+	},
+	{"dt": "Number Card", "filters": [["name", "in", [
+		"FrothIQ Active Sites",
+		"FrothIQ Total Tenants",
+		"FrothIQ Active API Keys",
+		"FrothIQ Stale Agents",
+	]]]},
+	{"dt": "Workspace", "filters": [["name", "=", "FrothIQ Portal"]]},
 ]
 
 # Scheduled Tasks
 # ---------------
 
-# scheduler_events = {
-# 	"all": [
-# 		"frothiq.tasks.all"
-# 	],
-# 	"daily": [
-# 		"frothiq.tasks.daily"
-# 	],
-# 	"hourly": [
-# 		"frothiq.tasks.hourly"
-# 	],
-# 	"weekly": [
-# 		"frothiq.tasks.weekly"
-# 	],
-# 	"monthly": [
-# 		"frothiq.tasks.monthly"
-# 	],
-# }
+scheduler_events = {
+	"hourly": [
+		"orbweaver_frothiq.frothiq_portal.api.portal_api.sync_agent_status",
+	],
+}
 
 # Testing
 # -------

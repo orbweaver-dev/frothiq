@@ -1,0 +1,50 @@
+[
+ {
+  "doctype": "Number Card",
+  "name": "FrothIQ Active Sites",
+  "label": "Active Sites",
+  "document_type": "FrothIQ Tenant Site",
+  "function": "Count",
+  "filters_json": "[[\"FrothIQ Tenant Site\",\"status\",\"=\",\"online\",false]]",
+  "color": "#22c55e",
+  "is_public": 1,
+  "show_percentage_stats": 0,
+  "type": "Document Type"
+ },
+ {
+  "doctype": "Number Card",
+  "name": "FrothIQ Total Tenants",
+  "label": "Total Tenants",
+  "document_type": "FrothIQ Tenant",
+  "function": "Count",
+  "filters_json": "[[\"FrothIQ Tenant\",\"status\",\"in\",\"active,trial\",false]]",
+  "color": "#6366f1",
+  "is_public": 1,
+  "show_percentage_stats": 0,
+  "type": "Document Type"
+ },
+ {
+  "doctype": "Number Card",
+  "name": "FrothIQ Active API Keys",
+  "label": "Active API Keys",
+  "document_type": "FrothIQ API Key",
+  "function": "Count",
+  "filters_json": "[[\"FrothIQ API Key\",\"revoked\",\"=\",0,false]]",
+  "color": "#0ea5e9",
+  "is_public": 1,
+  "show_percentage_stats": 0,
+  "type": "Document Type"
+ },
+ {
+  "doctype": "Number Card",
+  "name": "FrothIQ Stale Agents",
+  "label": "Stale / Offline Sites",
+  "document_type": "FrothIQ Tenant Site",
+  "function": "Count",
+  "filters_json": "[[\"FrothIQ Tenant Site\",\"status\",\"in\",\"stale,offline\",false]]",
+  "color": "#f59e0b",
+  "is_public": 1,
+  "show_percentage_stats": 0,
+  "type": "Document Type"
+ }
+]

@@ -1,0 +1,53 @@
+[
+ {
+  "doctype": "Workspace",
+  "name": "FrothIQ Portal",
+  "label": "FrothIQ Portal",
+  "title": "FrothIQ Portal",
+  "module": "FrothIQ Portal",
+  "category": "Modules",
+  "icon": "shield",
+  "type": "Module",
+  "is_hidden": 0,
+  "restrict_to_domain": "",
+  "roles": [
+   {"role": "FrothIQ Customer Admin"},
+   {"role": "FrothIQ Customer Viewer"},
+   {"role": "FrothIQ Admin"},
+   {"role": "System Manager"}
+  ],
+  "content": "[{\"type\":\"header\",\"data\":{\"text\":\"<h2 class=\\\"h2\\\">Security Overview<\\/h2>\",\"col\":12}},{\"type\":\"card\",\"data\":{\"card_name\":\"FrothIQ Active Sites\",\"col\":3}},{\"type\":\"card\",\"data\":{\"card_name\":\"FrothIQ Total Tenants\",\"col\":3}},{\"type\":\"card\",\"data\":{\"card_name\":\"FrothIQ Active API Keys\",\"col\":3}},{\"type\":\"card\",\"data\":{\"card_name\":\"FrothIQ Stale Agents\",\"col\":3}},{\"type\":\"spacer\",\"data\":{\"col\":12}},{\"type\":\"header\",\"data\":{\"text\":\"<h2 class=\\\"h2\\\">Manage<\\/h2>\",\"col\":12}},{\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"FrothIQ Tenant Site\",\"col\":3}},{\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"FrothIQ API Key\",\"col\":3}},{\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"FrothIQ Tenant\",\"col\":3}},{\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"FrothIQ Usage Snapshot\",\"col\":3}}]",
+  "shortcuts": [
+   {
+    "label": "My Sites",
+    "type": "DocType",
+    "link_to": "FrothIQ Tenant Site",
+    "icon": "globe",
+    "color": "#6366f1"
+   },
+   {
+    "label": "API Keys",
+    "type": "DocType",
+    "link_to": "FrothIQ API Key",
+    "icon": "key",
+    "color": "#0ea5e9"
+   },
+   {
+    "label": "My Tenant",
+    "type": "DocType",
+    "link_to": "FrothIQ Tenant",
+    "icon": "building",
+    "color": "#22c55e"
+   },
+   {
+    "label": "Usage History",
+    "type": "DocType",
+    "link_to": "FrothIQ Usage Snapshot",
+    "icon": "bar-chart",
+    "color": "#f59e0b"
+   }
+  ],
+  "charts": [],
+  "links": []
+ }
+]

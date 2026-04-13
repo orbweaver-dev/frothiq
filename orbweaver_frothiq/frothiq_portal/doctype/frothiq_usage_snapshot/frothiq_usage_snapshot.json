@@ -1,0 +1,143 @@
+{
+ "actions": [],
+ "autoname": "FUS-.YYYY.-.#####",
+ "creation": "2026-04-13 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "tenant",
+  "site",
+  "column_break_top",
+  "time_window",
+  "snapshot_time",
+  "section_break_metrics",
+  "requests",
+  "blocked",
+  "column_break_metrics",
+  "avg_score",
+  "peak_score",
+  "top_attack_category"
+ ],
+ "fields": [
+  {
+   "fieldname": "tenant",
+   "fieldtype": "Link",
+   "label": "Tenant",
+   "options": "FrothIQ Tenant",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "site",
+   "fieldtype": "Link",
+   "label": "Site",
+   "options": "FrothIQ Tenant Site",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "column_break_top",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "time_window",
+   "fieldtype": "Select",
+   "label": "Time Window",
+   "options": "24h\n7d\n30d",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "snapshot_time",
+   "fieldtype": "Datetime",
+   "label": "Snapshot Time",
+   "reqd": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_metrics",
+   "fieldtype": "Section Break",
+   "label": "Metrics"
+  },
+  {
+   "fieldname": "requests",
+   "fieldtype": "Int",
+   "label": "Total Requests",
+   "in_list_view": 1,
+   "default": "0"
+  },
+  {
+   "fieldname": "blocked",
+   "fieldtype": "Int",
+   "label": "Blocked",
+   "in_list_view": 1,
+   "default": "0"
+  },
+  {
+   "fieldname": "column_break_metrics",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "avg_score",
+   "fieldtype": "Float",
+   "label": "Avg Threat Score",
+   "precision": "1",
+   "default": "0"
+  },
+  {
+   "fieldname": "peak_score",
+   "fieldtype": "Float",
+   "label": "Peak Threat Score",
+   "precision": "1",
+   "default": "0"
+  },
+  {
+   "fieldname": "top_attack_category",
+   "fieldtype": "Data",
+   "label": "Top Attack Category",
+   "read_only": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-04-13 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "FrothIQ Portal",
+ "name": "FrothIQ Usage Snapshot",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "FrothIQ Admin",
+   "write": 1
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "FrothIQ Customer Admin"
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "FrothIQ Customer Viewer"
+  }
+ ],
+ "sort_field": "snapshot_time",
+ "sort_order": "DESC",
+ "track_changes": 0
+}
