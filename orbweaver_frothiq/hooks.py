@@ -29,6 +29,7 @@ app_license     = "Proprietary"
 app_include_js = [
     "/assets/orbweaver_frothiq/js/simulation_ui_extension.js",
     "/assets/orbweaver_frothiq/js/global_defense_mesh_ui.js",
+    "/assets/orbweaver_frothiq/js/growth_monetization_ui.js",
 ]
 
 # include js, css files in header of web template

@@ -104,15 +104,27 @@ def _build_usage_profile(tenant) -> dict:
          "event_timestamp": [">=", frappe.utils.add_days(frappe.utils.now(), -7)]},
     )
 
+    # Feature usage signals for gap weighting (Phase 5)
+    features = (
+        frappe.parse_json(tenant.features)
+        if isinstance(tenant.features, str)
+        else (tenant.features or {})
+    )
+
     return {
-        "plan":             tenant.plan or "free",
-        "site_count":       site_count,
-        "max_sites":        limits.get("max_sites", 1),
-        "site_utilisation": site_count / max(limits.get("max_sites", 1), 1),
-        "event_count_7d":   event_count_7d,
-        "critical_7d":      critical_7d,
+        "plan":               tenant.plan or "free",
+        "site_count":         site_count,
+        "max_sites":          limits.get("max_sites", 1),
+        "site_utilisation":   site_count / max(limits.get("max_sites", 1), 1),
+        "event_count_7d":     event_count_7d,
+        "critical_7d":        critical_7d,
         "events_contributed": int(tenant.events_contributed or 0),
-        "intel_score":      float(tenant.intel_contribution_score or 0.0),
+        "intel_score":        float(tenant.intel_contribution_score or 0.0),
+        # Feature gap signals
+        "has_simulation":     features.get("simulation_engine", False),
+        "has_defense_mesh":   features.get("defense_mesh", False),
+        "has_intel_market":   features.get("intel_market", False),
+        "has_policy_mesh":    features.get("policy_mesh", False),
     }
 
 
@@ -187,4 +199,157 @@ def _score_plan(plan: str, profile: dict, current_plan: str) -> PlanScore:
         cost_score = 10.0  # enterprise: only worthwhile at high usage
     score += cost_score
 
+    # --- Phase 5: Feature gap weighting (20 bonus points) ---
+    feature_gap_bonus = 0.0
+    feature_gap_reasons: list[str] = []
+
+    # Simulation engine gap
+    if plan == "enterprise" and not profile.get("has_simulation"):
+        feature_gap_bonus += 7
+        feature_gap_reasons.append("Simulation engine unlocked — validate detection continuously.")
+
+    # Defense mesh gap
+    if features.get("defense_mesh") and not profile.get("has_defense_mesh"):
+        feature_gap_bonus += 5
+        feature_gap_reasons.append("Defense Mesh cluster detection included — currently unavailable.")
+
+    # Intel marketplace gap
+    if features.get("intel_market") and not profile.get("has_intel_market"):
+        feature_gap_bonus += 4
+        feature_gap_reasons.append("Intel Marketplace gives access to global threat feed.")
+
+    # Policy mesh gap
+    if features.get("policy_mesh") and not profile.get("has_policy_mesh"):
+        feature_gap_bonus += 4
+        feature_gap_reasons.append("Policy-as-Code engine enables custom security rule push.")
+
+    score = min(score + feature_gap_bonus, 100.0)
+    reasons.extend(feature_gap_reasons)
+
     return PlanScore(plan=plan, score=min(score, 100.0), reasons=reasons)
+
+
+# ---------------------------------------------------------------------------
+# Phase 5: Optimal plan recommendation
+# ---------------------------------------------------------------------------
+
+def recommend_optimal_plan(tenant_id: str) -> dict:
+    """
+    Compute a full plan optimization report for a tenant.
+
+    Returns current inefficiencies, estimated lost value, and recommended
+    upgrade path — without any cross-tenant comparison.
+
+    Parameters
+    ----------
+    tenant_id : str — FrothIQ Tenant name
+
+    Returns
+    -------
+    dict with:
+      current_plan         : str
+      recommended_plan     : str | None
+      upgrade_delta_value  : float — estimated monthly value gain (normalised 0–100)
+      inefficiencies       : list[str] — human-readable friction points
+      lost_value_estimate  : dict — {monthly_usd: float, reason: str}
+      upgrade_path         : list[str] — ordered plan steps to reach recommended
+      plan_scores          : list[dict] — all plan scores (from recommend_plan)
+    """
+    try:
+        tenant = frappe.get_doc("FrothIQ Tenant", tenant_id)
+    except Exception as exc:
+        frappe.logger("frothiq_conversion").warning(
+            "recommend_optimal_plan: tenant not found: %s — %s", tenant_id, exc
+        )
+        return {"error": f"Tenant not found: {tenant_id}"}
+
+    from orbweaver_frothiq.frothiq_portal.api.billing_api import PLAN_LIMITS
+
+    current_plan = tenant.plan or "free"
+    profile = _build_usage_profile(tenant)
+    scores  = recommend_plan(tenant)
+
+    recommended_plan = next((s.plan for s in scores if s.is_recommended), None)
+    inefficiencies   = _compute_inefficiencies(profile, current_plan)
+    lost_value       = _estimate_lost_value(profile, current_plan, recommended_plan, PLAN_LIMITS)
+
+    # Upgrade path: sequential steps (e.g. free → pro → enterprise)
+    plan_order = ["free", "pro", "enterprise"]
+    current_idx   = plan_order.index(current_plan) if current_plan in plan_order else 0
+    recommend_idx = plan_order.index(recommended_plan) if recommended_plan in plan_order else current_idx
+    upgrade_path  = plan_order[current_idx + 1 : recommend_idx + 1]
+
+    # Delta value: score difference between recommended and current
+    current_score     = next((s.score for s in scores if s.plan == current_plan), 0.0)
+    recommended_score = next((s.score for s in scores if s.plan == recommended_plan), 0.0) if recommended_plan else current_score
+    upgrade_delta     = max(recommended_score - current_score, 0.0)
+
+    return {
+        "current_plan":        current_plan,
+        "recommended_plan":    recommended_plan,
+        "upgrade_delta_value": round(upgrade_delta, 1),
+        "inefficiencies":      inefficiencies,
+        "lost_value_estimate": lost_value,
+        "upgrade_path":        upgrade_path,
+        "plan_scores":         [s.to_dict() for s in scores],
+    }
+
+
+def _compute_inefficiencies(profile: dict, current_plan: str) -> list[str]:
+    """Identify specific friction points where the tenant outgrows their plan."""
+    issues = []
+
+    if profile["site_utilisation"] >= 0.9:
+        issues.append(
+            f"Site slots near capacity ({profile['site_count']}/{profile['max_sites']}) — "
+            "upgrade before hitting the hard limit."
+        )
+    if profile["critical_7d"] >= 5 and not profile.get("has_defense_mesh"):
+        issues.append(
+            f"{profile['critical_7d']} critical security events in 7 days with no Defense Mesh — "
+            "attack cluster visibility unavailable."
+        )
+    if profile["event_count_7d"] >= 30 and not profile.get("has_policy_mesh"):
+        issues.append(
+            "High event volume with no Policy-as-Code — rules cannot be auto-pushed to agents."
+        )
+    if not profile.get("has_simulation") and profile["critical_7d"] >= 3:
+        issues.append(
+            "No simulation engine — detection accuracy under active attack cannot be validated."
+        )
+    if profile["events_contributed"] >= 800 and not profile.get("has_intel_market"):
+        issues.append(
+            "High intel contribution with no Intel Marketplace access — "
+            "contributing data without benefit."
+        )
+    return issues
+
+
+def _estimate_lost_value(
+    profile: dict,
+    current_plan: str,
+    recommended_plan: Optional[str],
+    plan_limits: dict,
+) -> dict:
+    """
+    Estimate the monthly USD value lost by NOT being on the recommended plan.
+
+    Uses the price differential + utilisation as a proxy.
+    """
+    if not recommended_plan or recommended_plan == current_plan:
+        return {"monthly_usd": 0.0, "reason": "Already on optimal plan."}
+
+    current_price  = plan_limits.get(current_plan,  {}).get("monthly_price", 0)
+    recommend_price = plan_limits.get(recommended_plan, {}).get("monthly_price", 0)
+    price_diff     = recommend_price - current_price
+
+    # Lost value heuristic: price delta × utilisation pressure factor
+    util_factor = 1.0 + profile.get("site_utilisation", 0.5)
+    threat_factor = 1.0 + min(profile.get("critical_7d", 0) / 10, 1.0)
+    lost = price_diff * util_factor * threat_factor * 0.5
+
+    reason = (
+        f"On {current_plan} plan, you're missing features worth "
+        f"~${lost:.0f}/month in time/incident savings (based on event volume and feature gaps)."
+    )
+    return {"monthly_usd": round(lost, 2), "reason": reason}

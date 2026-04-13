@@ -45,6 +45,25 @@ _MAX_ACTIVE_BANNERS   = 2
 _BANNER_KEY_PREFIX    = "ce:banner:"
 _EMAIL_SENT_KEY       = "ce:email_sent:"
 
+# Phase 4: upgrade state machine
+# States: observed → nudged → engaged → converted → retained
+_UPGRADE_STATE_KEY    = "ce:upgrade_state:{tenant_name}"
+_UPGRADE_STATE_TTL    = 90 * 24 * 3600   # 90 days
+
+_VALID_STATES = ("observed", "nudged", "engaged", "converted", "retained")
+# Allowed forward transitions only — no backward movement
+_STATE_TRANSITIONS = {
+    "observed":  {"nudged"},
+    "nudged":    {"engaged", "converted"},
+    "engaged":   {"converted"},
+    "converted": {"retained"},
+    "retained":  set(),
+}
+
+# Routing thresholds for contextual_upgrade_router
+_INTENSITY_HIGH = 80
+_INTENSITY_MID  = 50
+
 
 def _banner_id(tenant_name: str, event_type: str) -> str:
     raw = f"{tenant_name}:{event_type}"
@@ -126,6 +145,11 @@ def get_active_banners(tenant_name: str) -> list[dict]:
         "EVENTS_SPIKE",
         "CAMPAIGNS_ACTIVE",
         "TRIAL_NEARING_END",
+        # Phase 1 additions
+        "GLOBAL_INTEL_SPIKE",
+        "CAMPAIGN_PROPAGATION_EVENT",
+        "SIMULATION_INSIGHT_EVENT",
+        "POLICY_UPGRADE_OPPORTUNITY",
     ]
     banners = []
     for etype in event_types:
@@ -165,6 +189,179 @@ def dismiss_banner(tenant_name: str, banner_id: str) -> bool:
     banner["dismissed"] = True
     frappe.cache().set(key, json.dumps(banner), expires_in_sec=_BANNER_TTL)
     return True
+
+
+# ---------------------------------------------------------------------------
+# Phase 4: Upgrade state machine
+# ---------------------------------------------------------------------------
+
+def get_upgrade_state(tenant_name: str) -> str:
+    """
+    Return the current upgrade funnel state for a tenant.
+
+    States: observed → nudged → engaged → converted → retained
+    Default state is "observed" (everyone starts here).
+
+    Parameters
+    ----------
+    tenant_name : str
+
+    Returns
+    -------
+    str — current state name
+    """
+    key = _UPGRADE_STATE_KEY.format(tenant_name=tenant_name)
+    try:
+        raw = frappe.cache().get(key)
+        state = raw.decode() if isinstance(raw, bytes) else str(raw or "")
+        return state if state in _VALID_STATES else "observed"
+    except Exception:
+        return "observed"
+
+
+def advance_upgrade_state(tenant_name: str, target_state: str) -> bool:
+    """
+    Advance the tenant's upgrade funnel state to target_state.
+
+    Only valid forward transitions are allowed (no skipping, no going back).
+
+    Parameters
+    ----------
+    tenant_name  : str
+    target_state : str — must be a valid next state
+
+    Returns
+    -------
+    bool — True if state was advanced, False if transition is invalid
+    """
+    if target_state not in _VALID_STATES:
+        return False
+
+    current = get_upgrade_state(tenant_name)
+    if target_state not in _STATE_TRANSITIONS.get(current, set()):
+        return False
+
+    key = _UPGRADE_STATE_KEY.format(tenant_name=tenant_name)
+    frappe.cache().set(key, target_state, expires_in_sec=_UPGRADE_STATE_TTL)
+    frappe.logger("frothiq_conversion").info(
+        "upgrade_orchestrator: state machine %s → %s for tenant %s",
+        current, target_state, tenant_name,
+    )
+    return True
+
+
+def contextual_upgrade_router(event, tenant) -> dict:
+    """
+    Route a ValueEvent to the appropriate upgrade action based on intensity.
+
+    Routing rules:
+    - intensity_score ≥ 80 → immediate upgrade modal + email trigger
+    - intensity_score 50–79 → dashboard banner + delayed email
+    - intensity_score < 50  → silent tracking only (advance to "nudged" quietly)
+
+    Also advances the state machine based on what action is taken.
+
+    Parameters
+    ----------
+    event  : ValueEvent (from value_event_detector)
+    tenant : FrothIQ Tenant doc
+
+    Returns
+    -------
+    dict — {action_taken, state_before, state_after, paywall_type, email_queued}
+    """
+    intensity = getattr(event, "intensity_score", 50)
+    current_state = get_upgrade_state(tenant.name)
+    result = {
+        "action_taken": None,
+        "state_before": current_state,
+        "state_after":  current_state,
+        "paywall_type": None,
+        "email_queued": False,
+    }
+
+    from .paywall_injector import is_safe_to_show_paywall, select_paywall_type
+
+    if intensity >= _INTENSITY_HIGH:
+        # HIGH: modal upgrade prompt + email
+        if is_safe_to_show_paywall(tenant.name, tenant.plan or "free"):
+            paywall_type = "modal_upgrade_prompt"
+            result["action_taken"] = "modal_and_email"
+            result["paywall_type"] = paywall_type
+
+            # Queue email immediately
+            email_sent = send_upgrade_email(tenant, event)
+            result["email_queued"] = email_sent
+
+            # Advance state: observed→nudged or nudged→engaged
+            if current_state == "observed":
+                advance_upgrade_state(tenant.name, "nudged")
+            elif current_state == "nudged":
+                advance_upgrade_state(tenant.name, "engaged")
+
+    elif intensity >= _INTENSITY_MID:
+        # MID: dashboard banner + delayed email (next daily run)
+        if is_safe_to_show_paywall(tenant.name, tenant.plan or "free"):
+            paywall_type = select_paywall_type(
+                feature=getattr(event, "cta_plan", ""),
+                intensity_score=intensity,
+                trigger_event_type=event.event_type,
+            )
+            result["action_taken"] = "banner_and_delayed_email"
+            result["paywall_type"] = paywall_type
+
+            # Email queued for next daily run (not sent immediately)
+            result["email_queued"] = False
+
+            if current_state == "observed":
+                advance_upgrade_state(tenant.name, "nudged")
+
+    else:
+        # LOW: silent tracking only
+        result["action_taken"] = "silent_track"
+        if current_state == "observed":
+            advance_upgrade_state(tenant.name, "nudged")
+
+    result["state_after"] = get_upgrade_state(tenant.name)
+    return result
+
+
+def mark_tenant_converted(tenant_name: str) -> bool:
+    """
+    Mark a tenant as converted (they upgraded their plan).
+
+    Called by billing_api when a plan upgrade is processed.
+    """
+    current = get_upgrade_state(tenant_name)
+    if current in ("observed", "nudged", "engaged"):
+        # Can jump to converted from any pre-converted state
+        key = _UPGRADE_STATE_KEY.format(tenant_name=tenant_name)
+        frappe.cache().set(key, "converted", expires_in_sec=_UPGRADE_STATE_TTL)
+        frappe.logger("frothiq_conversion").info(
+            "upgrade_orchestrator: CONVERTED — tenant %s", tenant_name
+        )
+        return True
+    if current == "converted":
+        return advance_upgrade_state(tenant_name, "retained")
+    return False
+
+
+def get_funnel_summary() -> dict:
+    """
+    Return aggregate counts across all tenant upgrade funnel states.
+
+    Scans all active tenants and returns state distribution.
+    Admin-only operation.
+    """
+    tenants = frappe.get_all("FrothIQ Tenant", filters={"is_active": 1}, fields=["name"])
+    counts = {s: 0 for s in _VALID_STATES}
+    for row in tenants:
+        state = get_upgrade_state(row["name"])
+        counts[state] = counts.get(state, 0) + 1
+    return {
+        "total":  len(tenants),
+        "states": counts,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -270,14 +467,29 @@ def orchestrate(tenant, send_email: bool = True) -> dict:
     events         = detect_events(tenant)
     banners_pushed = push_banners(tenant, events)
     email_sent     = False
+    routed_actions = []
 
-    if send_email and events:
-        # Send email for the highest-priority event
+    for event in events:
+        route = contextual_upgrade_router(event, tenant)
+        routed_actions.append({
+            "event_type":   event.event_type,
+            "action_taken": route["action_taken"],
+            "state_after":  route["state_after"],
+            "paywall_type": route["paywall_type"],
+        })
+        if route.get("email_queued"):
+            email_sent = True
+
+    # Legacy fallback: if no contextual router sent email, try top event
+    if send_email and events and not email_sent:
         top_event = events[0]
-        email_sent = send_upgrade_email(tenant, top_event)
+        if getattr(top_event, "intensity_score", 50) >= 70:
+            email_sent = send_upgrade_email(tenant, top_event)
 
     return {
         "events":         [e.event_type for e in events],
         "banners_pushed": [b["event_type"] for b in banners_pushed],
         "email_sent":     email_sent,
+        "routed_actions": routed_actions,
+        "funnel_state":   get_upgrade_state(tenant.name),
     }
