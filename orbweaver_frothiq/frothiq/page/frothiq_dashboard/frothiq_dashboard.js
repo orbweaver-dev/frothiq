@@ -356,6 +356,82 @@ const CSS = `
 	color: var(--text-muted);
 	font-size: 0.82rem;
 }
+
+/* ── Federation ── */
+.fiq-fed-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 16px;
+	margin-bottom: 16px;
+}
+@media (max-width: 1100px) { .fiq-fed-grid { grid-template-columns: 1fr; } }
+
+.fiq-node-row {
+	display: grid;
+	grid-template-columns: 80px 1fr 70px 80px 70px;
+	align-items: center;
+	gap: 0;
+	padding: 7px 14px;
+	border-bottom: 1px solid var(--border-color);
+	font-size: 0.78rem;
+}
+.fiq-node-row:last-child { border-bottom: none; }
+.fiq-node-row:hover { background: var(--hover-bg); }
+
+.fiq-node-badge {
+	display: inline-block;
+	font-size: 0.67rem;
+	font-weight: 700;
+	border-radius: 4px;
+	padding: 1px 6px;
+}
+.fiq-node-badge.ok      { background: #dcfce7; color: #166534; }
+.fiq-node-badge.warn    { background: #fef9c3; color: #854d0e; }
+.fiq-node-badge.err     { background: #fee2e2; color: #991b1b; }
+.fiq-node-badge.primary { background: #dbeafe; color: #1e40af; }
+.fiq-node-badge.secondary { background: #f3e8ff; color: #6b21a8; }
+@media (prefers-color-scheme: dark) {
+	.fiq-node-badge.ok        { background: #14532d; color: #86efac; }
+	.fiq-node-badge.warn      { background: #713f12; color: #fde68a; }
+	.fiq-node-badge.err       { background: #7f1d1d; color: #fca5a5; }
+	.fiq-node-badge.primary   { background: #1e3a5f; color: #93c5fd; }
+	.fiq-node-badge.secondary { background: #3b0764; color: #d8b4fe; }
+}
+
+.fiq-global-row {
+	display: grid;
+	grid-template-columns: 130px 56px 90px 1fr;
+	align-items: center;
+	gap: 0;
+	padding: 7px 14px;
+	border-bottom: 1px solid var(--border-color);
+	font-size: 0.78rem;
+}
+.fiq-global-row:last-child { border-bottom: none; }
+.fiq-global-row:hover { background: var(--hover-bg); }
+
+.fiq-store-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr 1fr;
+	gap: 10px;
+	padding: 14px 16px;
+}
+.fiq-store-stat {
+	text-align: center;
+}
+.fiq-store-stat-value {
+	font-size: 1.4rem;
+	font-weight: 700;
+	color: var(--heading-color);
+	line-height: 1;
+}
+.fiq-store-stat-label {
+	font-size: 0.7rem;
+	text-transform: uppercase;
+	letter-spacing: .06em;
+	color: var(--text-muted);
+	margin-top: 3px;
+}
 </style>`;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -525,6 +601,57 @@ class FrothIQDashboard {
 					</div>
 				</div>
 			</div>
+
+			<!-- ── Federation section ─────────────────────────────────────── -->
+			<div style="padding: 10px 0 6px 0; margin-top: 6px; border-top: 1px solid var(--border-color);">
+				<div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);font-weight:600;padding-bottom:10px;">
+					🔗 Federated Threat Intelligence
+				</div>
+			</div>
+
+			<!-- Node Health Status (full width) -->
+			<div class="fiq-panel" id="fiq-node-panel" style="margin-bottom:16px">
+				<div class="fiq-panel-header">
+					🛰 Node Health Status
+					<span style="font-size:0.68rem;font-weight:400;margin-left:auto;color:var(--text-muted)" id="fiq-node-updated"></span>
+				</div>
+				<div id="fiq-node-local" style="padding:10px 16px 0 16px;font-size:0.82rem;color:var(--text-muted)"></div>
+				<div class="fiq-col-header" style="grid-template-columns:80px 1fr 70px 80px 70px">
+					<span>Role</span><span>Node ID</span><span>Peer Count</span><span>Endpoint</span><span>Status</span>
+				</div>
+				<div class="fiq-panel-body" id="fiq-node-body" style="max-height:220px">
+					<div class="fiq-spinner">Loading…</div>
+				</div>
+			</div>
+
+			<!-- Federated Threat Feed + Top Global Offenders -->
+			<div class="fiq-fed-grid">
+				<!-- Federated Threat Feed -->
+				<div class="fiq-panel" id="fiq-fed-feed-panel">
+					<div class="fiq-panel-header">
+						📡 Federated Threat Feed
+						<span style="font-size:0.68rem;font-weight:400;margin-left:auto;color:var(--text-muted)" id="fiq-fed-store-stats"></span>
+					</div>
+					<div id="fiq-fed-store-summary"></div>
+					<div class="fiq-col-header" style="grid-template-columns:130px 56px 90px 1fr">
+						<span>IP Address</span><span>Score</span><span>Type</span><span>Origin Node</span>
+					</div>
+					<div class="fiq-panel-body" id="fiq-fed-feed-body">
+						<div class="fiq-spinner">Loading…</div>
+					</div>
+				</div>
+
+				<!-- Top Global Offenders -->
+				<div class="fiq-panel" id="fiq-global-panel">
+					<div class="fiq-panel-header">🌍 Top Global Offenders</div>
+					<div class="fiq-col-header" style="grid-template-columns:130px 56px 90px 1fr">
+						<span>IP Address</span><span>Score</span><span>Type</span><span>Origin Node</span>
+					</div>
+					<div class="fiq-panel-body" id="fiq-global-body">
+						<div class="fiq-spinner">Loading…</div>
+					</div>
+				</div>
+			</div>
 		</div>`);
 
 		// Toolbar events
@@ -543,6 +670,9 @@ class FrothIQDashboard {
 		this._loadBreakdown();
 		this._loadTopIPs();
 		this._loadCSFHistory();
+		this._loadNodeHealth();
+		this._loadFederationFeed();
+		this._loadGlobalOffenders();
 		this._schedulePoll();
 	}
 
@@ -783,6 +913,136 @@ class FrothIQDashboard {
 				$body.html(html);
 			},
 		});
+	}
+
+	// ── Node Health Status ─────────────────────────────────────────────────
+
+	_loadNodeHealth() {
+		frappe.call({
+			method: "orbweaver_frothiq.frothiq.api.dashboard_api.get_node_health",
+			freeze: false,
+			callback: (r) => {
+				const d = r.message || {};
+				const $body = this.$main.find("#fiq-node-body");
+				const $local = this.$main.find("#fiq-node-local");
+				const $updated = this.$main.find("#fiq-node-updated");
+
+				if (d.error || d.status === "unreachable") {
+					$local.html("");
+					$body.html(`<div class="fiq-empty">⚠ Node unreachable: ${esc(d.error || "connection refused")}</div>`);
+					return;
+				}
+
+				const ts = d.ts ? new Date(d.ts * 1000).toLocaleTimeString() : "—";
+				$updated.text(`updated ${ts}`);
+
+				// Local node summary bar
+				$local.html(`
+					<span style="margin-right:12px">
+						<span style="color:var(--text-muted)">Node:</span>
+						<code style="font-size:0.75rem">${esc((d.node_id||"").slice(0,16))}…</code>
+					</span>
+					<span style="margin-right:12px">
+						<span class="fiq-node-badge ${esc(d.node_role||"")}">${esc(d.node_role||"—")}</span>
+					</span>
+					<span style="color:var(--text-muted);font-size:0.78rem">${d.peer_count||0} peer(s) configured</span>
+				`);
+
+				// Build peer rows (first row = self)
+				const selfRow = `<div class="fiq-node-row">
+					<span class="fiq-node-badge ${esc(d.node_role||"")}">${esc(d.node_role||"—")}</span>
+					<code style="font-size:0.73rem">${esc((d.node_id||"").slice(0,32))}…</code>
+					<span>—</span>
+					<span style="color:var(--text-muted);font-size:0.73rem">localhost</span>
+					<span class="fiq-node-badge ok">online</span>
+				</div>`;
+
+				$body.html(selfRow || '<div class="fiq-empty">No peer data</div>');
+			},
+		});
+	}
+
+	// ── Federated Threat Feed ──────────────────────────────────────────────
+
+	_loadFederationFeed() {
+		frappe.call({
+			method: "orbweaver_frothiq.frothiq.api.dashboard_api.get_federation_status",
+			freeze: false,
+			callback: (r) => {
+				const d = r.message || {};
+				const $body = this.$main.find("#fiq-fed-feed-body");
+				const $summary = this.$main.find("#fiq-fed-store-summary");
+				const $stats = this.$main.find("#fiq-fed-store-stats");
+
+				if (d.error) {
+					$summary.html("");
+					$body.html(`<div class="fiq-empty">⚠ Federation unavailable: ${esc(d.error)}</div>`);
+					return;
+				}
+
+				// Store stats banner
+				const store = d.store || {};
+				if (store.total_ips !== undefined) {
+					$stats.text(`${store.total_ips} IPs tracked`);
+					$summary.html(`
+						<div class="fiq-store-grid">
+							<div class="fiq-store-stat">
+								<div class="fiq-store-stat-value">${store.total_ips||0}</div>
+								<div class="fiq-store-stat-label">Tracked IPs</div>
+							</div>
+							<div class="fiq-store-stat">
+								<div class="fiq-store-stat-value">${store.contributing_nodes||0}</div>
+								<div class="fiq-store-stat-label">Contributing Nodes</div>
+							</div>
+							<div class="fiq-store-stat">
+								<div class="fiq-store-stat-value">${store.total_entries||0}</div>
+								<div class="fiq-store-stat-label">Intel Entries</div>
+							</div>
+						</div>
+					`);
+				}
+
+				// Top offenders from feed
+				const offenders = (d.top_global_offenders || []).slice(0, 15);
+				if (!offenders.length) {
+					$body.html('<div class="fiq-empty">No federated intel received yet</div>');
+					return;
+				}
+				$body.html(offenders.map(e => this._globalRowHtml(e)).join(""));
+			},
+		});
+	}
+
+	// ── Top Global Offenders ──────────────────────────────────────────────
+
+	_loadGlobalOffenders() {
+		frappe.call({
+			method: "orbweaver_frothiq.frothiq.api.dashboard_api.get_global_offenders",
+			args: { limit: 15 },
+			freeze: false,
+			callback: (r) => {
+				const rows = r.message || [];
+				const $body = this.$main.find("#fiq-global-body");
+				if (!rows.length) {
+					$body.html('<div class="fiq-empty">No global offenders recorded</div>');
+					return;
+				}
+				$body.html(rows.map(e => this._globalRowHtml(e)).join(""));
+			},
+		});
+	}
+
+	_globalRowHtml(e) {
+		const score = e.merged_score ?? e.score ?? 0;
+		const sc = scoreClass(score);
+		const type = (e.classification || "unknown").replace(/_/g, " ");
+		const origin = (e.origin_node_id || e.node_id || "—").slice(0, 16);
+		return `<div class="fiq-global-row">
+			<span style="font-weight:600">${esc(e.ip || e.ip_address || "—")}</span>
+			<span class="fiq-score ${sc}">${score}</span>
+			<span style="font-size:0.72rem;color:${attackColor(e.classification)};font-weight:600">${esc(type)}</span>
+			<code style="font-size:0.7rem;color:var(--text-muted)">${esc(origin)}…</code>
+		</div>`;
 	}
 
 	// ── Cleanup ────────────────────────────────────────────────────────────

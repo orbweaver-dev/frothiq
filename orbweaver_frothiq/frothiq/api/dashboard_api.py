@@ -12,9 +12,19 @@ Also provides the realtime notifier hook called on FrothIQ Log after_insert.
 """
 
 import json
+import os
 
 import frappe
+import requests as _requests
 from frappe.utils import add_to_date, now_datetime
+
+_FROTHIQ_CORE_URL = os.getenv("FROTHIQ_CORE_URL", "http://127.0.0.1:8001")
+_REQUEST_TIMEOUT = 5  # seconds
+
+
+def _get_admin_key():
+	"""Return the FrothIQ admin API key from site config or environment."""
+	return frappe.conf.get("frothiq_api_key") or os.getenv("FROTHIQ_API_KEY", "")
 
 
 def _since(hours: int):
@@ -178,6 +188,70 @@ def get_csf_history(limit=20):
 		limit=int(limit),
 	)
 	return rows
+
+
+# ---------------------------------------------------------------------------
+# Realtime — called by doc_events hook on FrothIQ Log after_insert
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Federation — node health, global offenders, peer status
+# ---------------------------------------------------------------------------
+
+@frappe.whitelist()
+def get_node_health():
+	"""
+	Return health info for the local FrothIQ node.
+	Calls GET /api/v2/federation/health (unauthenticated).
+	"""
+	try:
+		resp = _requests.get(
+			f"{_FROTHIQ_CORE_URL}/api/v2/federation/health",
+			timeout=_REQUEST_TIMEOUT,
+		)
+		resp.raise_for_status()
+		return resp.json()
+	except Exception as exc:
+		return {"status": "unreachable", "error": str(exc)}
+
+
+@frappe.whitelist()
+def get_federation_status():
+	"""
+	Return full federation summary: node identity, peer sync state, store stats.
+	Calls GET /api/v2/federation/status (admin key required).
+	"""
+	key = _get_admin_key()
+	try:
+		resp = _requests.get(
+			f"{_FROTHIQ_CORE_URL}/api/v2/federation/status",
+			headers={"X-FrothIQ-Key": key},
+			timeout=_REQUEST_TIMEOUT,
+		)
+		resp.raise_for_status()
+		return resp.json()
+	except Exception as exc:
+		return {"error": str(exc), "local_node": None, "store": None}
+
+
+@frappe.whitelist()
+def get_global_offenders(limit=10):
+	"""
+	Return the top globally-observed threat IPs from the federation store.
+	Calls GET /api/v2/federation/status and extracts top_global_offenders.
+	"""
+	key = _get_admin_key()
+	try:
+		resp = _requests.get(
+			f"{_FROTHIQ_CORE_URL}/api/v2/federation/status",
+			headers={"X-FrothIQ-Key": key},
+			timeout=_REQUEST_TIMEOUT,
+		)
+		resp.raise_for_status()
+		data = resp.json()
+		return (data.get("top_global_offenders") or [])[:int(limit)]
+	except Exception:
+		return []
 
 
 # ---------------------------------------------------------------------------
