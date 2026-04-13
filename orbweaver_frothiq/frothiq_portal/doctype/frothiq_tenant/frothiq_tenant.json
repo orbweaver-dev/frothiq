@@ -11,7 +11,13 @@
   "plan",
   "status",
   "section_break_notes",
-  "notes"
+  "notes",
+  "section_break_billing",
+  "erpnext_customer",
+  "subscription",
+  "column_break_billing",
+  "subscription_status",
+  "next_billing_date"
  ],
  "fields": [
   {
@@ -61,6 +67,46 @@
    "fieldname": "notes",
    "fieldtype": "Small Text",
    "label": "Notes"
+  },
+  {
+   "fieldname": "section_break_billing",
+   "fieldtype": "Section Break",
+   "label": "Billing",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "erpnext_customer",
+   "fieldtype": "Link",
+   "label": "ERPNext Customer",
+   "options": "Customer",
+   "read_only": 1,
+   "description": "Auto-linked ERPNext Customer record for billing"
+  },
+  {
+   "fieldname": "subscription",
+   "fieldtype": "Link",
+   "label": "Subscription",
+   "options": "Subscription",
+   "read_only": 1,
+   "description": "Active ERPNext Subscription for this tenant"
+  },
+  {
+   "fieldname": "column_break_billing",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "subscription_status",
+   "fieldtype": "Data",
+   "label": "Subscription Status",
+   "read_only": 1,
+   "description": "Pulled from ERPNext Subscription"
+  },
+  {
+   "fieldname": "next_billing_date",
+   "fieldtype": "Date",
+   "label": "Next Billing Date",
+   "read_only": 1,
+   "description": "Next invoice date from ERPNext Subscription"
   }
  ],
  "links": [],

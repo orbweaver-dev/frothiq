@@ -170,6 +170,11 @@ fixtures = [
 # ---------------
 
 scheduler_events = {
+	"cron": {
+		"*/5 * * * *": [
+			"orbweaver_frothiq.frothiq_portal.api.billing_api.sync_tenants_to_core",
+		],
+	},
 	"hourly": [
 		"orbweaver_frothiq.frothiq_portal.api.portal_api.sync_agent_status",
 	],

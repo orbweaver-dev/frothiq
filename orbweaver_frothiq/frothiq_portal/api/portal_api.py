@@ -428,6 +428,48 @@ def get_site_mode(agent_id, api_key):
 
 
 # ---------------------------------------------------------------------------
+# 9. Plan info — returns current plan limits for the tenant's plan
+# ---------------------------------------------------------------------------
+
+@frappe.whitelist()
+def get_plan_info():
+    """
+    Return the current plan, limits, and subscription status for the tenant.
+    Used by the Tenant form JS to render usage bars and the upgrade dialog.
+    """
+    tenant = _get_my_tenant()
+
+    from orbweaver_frothiq.frothiq_portal.api.billing_api import plan_limits
+    limits = plan_limits(tenant.plan or "free")
+
+    # Count active sites
+    site_count = frappe.db.count(
+        "FrothIQ Tenant Site",
+        filters={"tenant": tenant.name},
+    )
+    # Count active API keys
+    key_count = frappe.db.count(
+        "FrothIQ API Key",
+        filters={"tenant": tenant.name, "revoked": 0},
+    )
+
+    return {
+        "tenant": tenant.name,
+        "plan": tenant.plan or "free",
+        "status": tenant.status,
+        "subscription": tenant.subscription,
+        "subscription_status": tenant.subscription_status,
+        "next_billing_date": str(tenant.next_billing_date) if tenant.next_billing_date else None,
+        "erpnext_customer": tenant.erpnext_customer,
+        "limits": limits,
+        "usage": {
+            "sites": site_count,
+            "api_keys": key_count,
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
 # Scheduler — sync agent status + write usage snapshots (hourly)
 # ---------------------------------------------------------------------------
 
