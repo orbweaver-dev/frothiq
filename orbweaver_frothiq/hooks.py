@@ -165,7 +165,7 @@ fixtures = [
 		"FrothIQ Active API Keys",
 		"FrothIQ Stale Agents",
 	]]]},
-	{"dt": "Workspace", "filters": [["name", "=", "FrothIQ Portal"]]},
+	{"dt": "Workspace", "filters": [["name", "in", ["FrothIQ Portal", "FrothIQ Intelligence"]]]},
 ]
 
 # Scheduled Tasks

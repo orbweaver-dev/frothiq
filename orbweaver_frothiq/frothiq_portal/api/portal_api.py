@@ -703,6 +703,108 @@ def save_notification_settings(webhook_url=None, webhook_events=None,
 
 
 @frappe.whitelist()
+def get_intel_status():
+    """
+    Return Intel Marketplace feature availability and store health for the tenant.
+    Available to all plans (returns upgrade prompt data for free plan).
+    """
+    tenant = _get_my_tenant()
+    try:
+        data = _core_get("/api/v2/intel/status")
+    except Exception:
+        data = {"store_count": 0, "last_refresh_age_seconds": None}
+    return {
+        "tenant": tenant.name,
+        "plan": tenant.plan or "free",
+        "feature_enabled": (tenant.plan or "free") in ("pro", "enterprise"),
+        "store_count": data.get("store_count", 0),
+        "last_refresh_age_seconds": data.get("last_refresh_age_seconds"),
+    }
+
+
+@frappe.whitelist()
+def get_global_threat_feed(n=100):
+    """
+    Fetch the global threat feed from the Intel Marketplace.
+    Pro plan: limited to top 100. Enterprise: up to 10,000.
+    Free plan: returns an upgrade prompt.
+    """
+    tenant = _get_my_tenant()
+    plan = tenant.plan or "free"
+    if plan == "free":
+        return {"access": "upgrade_required", "plan": plan, "records": []}
+
+    try:
+        n = min(int(n), 10000 if plan == "enterprise" else 100)
+        data = _core_get(f"/api/v2/intel/global-top", params={"n": n})
+        return {
+            "access": "granted",
+            "plan": plan,
+            "limit": data.get("limit", n),
+            "count": data.get("count", 0),
+            "store_total": data.get("store_total", 0),
+            "records": data.get("records") or [],
+            "last_refresh_age_seconds": data.get("last_refresh_age_seconds"),
+        }
+    except Exception as exc:
+        frappe.log_error(f"get_global_threat_feed failed: {exc}", "FrothIQ Intel")
+        return {"access": "error", "plan": plan, "records": [], "error": str(exc)}
+
+
+@frappe.whitelist()
+def lookup_intel_ip(ip):
+    """
+    Look up a specific IP in the global intelligence feed.
+    Enterprise plan only.
+    """
+    tenant = _get_my_tenant()
+    plan = tenant.plan or "free"
+    if plan != "enterprise":
+        return {
+            "access": "upgrade_required",
+            "plan": plan,
+            "message": "IP lookup requires the Enterprise plan.",
+        }
+    if not ip or not ip.strip():
+        frappe.throw("IP address is required.")
+    try:
+        data = _core_get(f"/api/v2/intel/ip/{ip.strip()}")
+        return {"access": "granted", "plan": plan, **data}
+    except Exception as exc:
+        frappe.log_error(f"lookup_intel_ip failed for {ip}: {exc}", "FrothIQ Intel")
+        return {"access": "error", "plan": plan, "error": str(exc)}
+
+
+@frappe.whitelist()
+def get_intel_campaigns(limit=50):
+    """
+    Fetch anonymized campaign intelligence from the marketplace.
+    Enterprise plan only.
+    """
+    tenant = _get_my_tenant()
+    plan = tenant.plan or "free"
+    if plan != "enterprise":
+        return {
+            "access": "upgrade_required",
+            "plan": plan,
+            "message": "Campaign intelligence requires the Enterprise plan.",
+            "campaigns": [],
+        }
+    try:
+        limit = min(int(limit), 500)
+        data = _core_get(f"/api/v2/intel/campaigns", params={"limit": limit})
+        return {
+            "access": "granted",
+            "plan": plan,
+            "count": data.get("count", 0),
+            "campaigns": data.get("campaigns") or [],
+        }
+    except Exception as exc:
+        frappe.log_error(f"get_intel_campaigns failed: {exc}", "FrothIQ Intel")
+        return {"access": "error", "plan": plan, "campaigns": [], "error": str(exc)}
+
+
+@frappe.whitelist()
 def send_test_alert():
     """
     Send a synthetic FrothIQ Event for the current tenant.

@@ -34,6 +34,7 @@ PLAN_LIMITS: dict[str, dict] = {
             "campaigns": False,
             "response_engine": False,
             "adaptive_scoring": True,
+            "intel_market": False,
         },
     },
     "pro": {
@@ -46,6 +47,7 @@ PLAN_LIMITS: dict[str, dict] = {
             "campaigns": True,
             "response_engine": False,
             "adaptive_scoring": True,
+            "intel_market": True,
         },
     },
     "enterprise": {
@@ -58,6 +60,7 @@ PLAN_LIMITS: dict[str, dict] = {
             "campaigns": True,
             "response_engine": True,
             "adaptive_scoring": True,
+            "intel_market": True,
         },
     },
 }
@@ -392,6 +395,10 @@ def sync_events_from_core():
 
     frappe.db.commit()
 
+    # Update contribution scores for tenants that received events
+    if inserted > 0:
+        _update_intel_contribution_scores(events, active_tenants)
+
     # Advance the cursor so next run fetches only new events
     if newest_ts > since:
         frappe.cache().set(since_key, str(newest_ts), expires_in_sec=86400)
@@ -400,6 +407,81 @@ def sync_events_from_core():
         "sync_events_from_core: fetched %d events, inserted %d FrothIQ Event docs",
         len(events), inserted,
     )
+
+
+def _update_intel_contribution_scores(events: list[dict], active_tenants: list[str]) -> None:
+    """
+    Update intel_contribution_score and events_contributed for active tenants.
+
+    Logic (Phase 6):
+      - +1.0 per unique IP in the event set (base contribution)
+      - +0.5 bonus for high-confidence signals (score ≥ 70)
+      - +0.5 bonus for campaign-type events (high-value intelligence)
+      - events_contributed tracks total unique IP count contributed
+
+    All tenants that are active share the same global feed, so all active
+    tenants receive contribution credit for the current sync batch.
+    This models the cooperative nature of the intel pool.
+    """
+    if not events or not active_tenants:
+        return
+
+    try:
+        # Compute unique IPs and weights from the event batch
+        unique_ips: dict[str, float] = {}
+        for ev in events:
+            ip = ev.get("ip_address") or ""
+            if not ip or ip == "TEST_ALERT":
+                continue
+            score = float(ev.get("score") or 0)
+            event_type = ev.get("event_type", "")
+            weight = 1.0
+            if score >= 70:
+                weight += 0.5
+            if event_type == "campaign":
+                weight += 0.5
+            unique_ips[ip] = max(unique_ips.get(ip, 0.0), weight)
+
+        if not unique_ips:
+            return
+
+        total_contribution = sum(unique_ips.values())
+        unique_ip_count = len(unique_ips)
+        now = frappe.utils.now_datetime()
+
+        for tid in active_tenants:
+            try:
+                current_score = frappe.db.get_value(
+                    "FrothIQ Tenant", tid, "intel_contribution_score"
+                ) or 0.0
+                current_count = frappe.db.get_value(
+                    "FrothIQ Tenant", tid, "events_contributed"
+                ) or 0
+
+                frappe.db.set_value(
+                    "FrothIQ Tenant", tid,
+                    {
+                        "intel_contribution_score": round(float(current_score) + total_contribution, 2),
+                        "events_contributed": int(current_count) + unique_ip_count,
+                        "intel_last_contribution": now,
+                    },
+                    update_modified=False,
+                )
+            except Exception as exc:
+                frappe.logger("frothiq_billing").debug(
+                    "_update_intel_contribution_scores: failed for %s: %s", tid, exc
+                )
+
+        frappe.db.commit()
+        frappe.logger("frothiq_billing").info(
+            "_update_intel_contribution_scores: +%.1f score, +%d IPs for %d tenants",
+            total_contribution, unique_ip_count, len(active_tenants),
+        )
+    except Exception as exc:
+        frappe.log_error(
+            f"_update_intel_contribution_scores failed: {exc}",
+            "FrothIQ Intel Contribution",
+        )
 
 
 # ---------------------------------------------------------------------------

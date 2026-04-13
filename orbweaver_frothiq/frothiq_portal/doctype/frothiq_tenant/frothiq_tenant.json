@@ -23,7 +23,12 @@
   "webhook_events",
   "column_break_notifications",
   "alert_email",
-  "alert_min_severity"
+  "alert_min_severity",
+  "section_break_intel",
+  "intel_contribution_score",
+  "events_contributed",
+  "column_break_intel",
+  "intel_last_contribution"
  ],
  "fields": [
   {
@@ -151,6 +156,41 @@
    "options": "low\nmedium\nhigh\ncritical",
    "default": "high",
    "description": "Only generate alerts at or above this severity level"
+  },
+  {
+   "fieldname": "section_break_intel",
+   "fieldtype": "Section Break",
+   "label": "Intel Marketplace Contribution",
+   "collapsible": 1,
+   "description": "Tracks this tenant's contribution to the global threat intelligence pool"
+  },
+  {
+   "fieldname": "intel_contribution_score",
+   "fieldtype": "Float",
+   "label": "Contribution Score",
+   "read_only": 1,
+   "precision": "2",
+   "default": "0",
+   "description": "Weighted contribution score (+1 per unique contributing IP, weighted by signal quality)"
+  },
+  {
+   "fieldname": "events_contributed",
+   "fieldtype": "Int",
+   "label": "Events Contributed",
+   "read_only": 1,
+   "default": "0",
+   "description": "Total unique IPs this tenant has contributed to the global feed"
+  },
+  {
+   "fieldname": "column_break_intel",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "intel_last_contribution",
+   "fieldtype": "Datetime",
+   "label": "Last Contribution",
+   "read_only": 1,
+   "description": "Timestamp of the most recent intelligence contribution"
   }
  ],
  "links": [],

@@ -1,0 +1,39 @@
+[
+ {
+  "doctype": "Workspace",
+  "name": "FrothIQ Intelligence",
+  "label": "FrothIQ Intelligence",
+  "title": "FrothIQ Intelligence",
+  "module": "FrothIQ Portal",
+  "category": "Modules",
+  "icon": "globe",
+  "type": "Module",
+  "is_hidden": 0,
+  "restrict_to_domain": "",
+  "roles": [
+   {"role": "FrothIQ Customer Admin"},
+   {"role": "FrothIQ Customer Viewer"},
+   {"role": "FrothIQ Admin"},
+   {"role": "System Manager"}
+  ],
+  "content": "[{\"type\":\"header\",\"data\":{\"text\":\"<h2 class=\\\"h2\\\">Threat Intelligence Marketplace<\\/h2>\",\"col\":12}},{\"type\":\"spacer\",\"data\":{\"col\":12}},{\"type\":\"header\",\"data\":{\"text\":\"<h2 class=\\\"h2\\\">Intelligence Records<\\/h2>\",\"col\":12}},{\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"FrothIQ Event\",\"col\":3}}]",
+  "shortcuts": [
+   {
+    "label": "Security Events",
+    "type": "DocType",
+    "link_to": "FrothIQ Event",
+    "icon": "alert-triangle",
+    "color": "#dc2626"
+   },
+   {
+    "label": "Tenant Settings",
+    "type": "DocType",
+    "link_to": "FrothIQ Tenant",
+    "icon": "settings",
+    "color": "#6366f1"
+   }
+  ],
+  "charts": [],
+  "links": []
+ }
+]
