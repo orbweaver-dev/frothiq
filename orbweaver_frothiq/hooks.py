@@ -138,6 +138,11 @@ doc_events = {
 	}
 }
 
+# Fixtures — roles and workspace shipped with the app
+fixtures = [
+	{"dt": "Role", "filters": [["role_name", "in", ["FrothIQ Analyst", "FrothIQ Admin"]]]},
+]
+
 # Scheduled Tasks
 # ---------------
 
