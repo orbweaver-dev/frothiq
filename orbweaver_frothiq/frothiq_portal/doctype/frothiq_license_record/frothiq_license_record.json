@@ -1,0 +1,182 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "field:license_id",
+ "creation": "2026-04-14 00:00:00",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "license_id",
+  "tenant_id",
+  "site_id",
+  "column_break_1",
+  "plan",
+  "status",
+  "version",
+  "section_break_timing",
+  "issued_at",
+  "expires_at",
+  "last_rotated",
+  "section_break_crypto",
+  "signature",
+  "public_fingerprint",
+  "subscription_hash",
+  "section_break_flags",
+  "feature_flags",
+  "limits"
+ ],
+ "fields": [
+  {
+   "bold": 1,
+   "fieldname": "license_id",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "License ID",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "tenant_id",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Tenant",
+   "options": "FrothIQ Tenant",
+   "reqd": 1
+  },
+  {
+   "fieldname": "site_id",
+   "fieldtype": "Link",
+   "label": "Site (optional)",
+   "options": "FrothIQ Tenant Site"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "plan",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Plan",
+   "options": "free\npro\nenterprise",
+   "reqd": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "active\ntrial\nsuspended\nrevoked\nexpired",
+   "reqd": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "version",
+   "fieldtype": "Int",
+   "label": "Version",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_timing",
+   "fieldtype": "Section Break",
+   "label": "Timing"
+  },
+  {
+   "fieldname": "issued_at",
+   "fieldtype": "Float",
+   "label": "Issued At (Unix)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "expires_at",
+   "fieldtype": "Float",
+   "label": "Expires At (Unix)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_rotated",
+   "fieldtype": "Float",
+   "label": "Last Rotated (Unix)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_crypto",
+   "fieldtype": "Section Break",
+   "label": "Cryptographic Fields",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "signature",
+   "fieldtype": "Small Text",
+   "label": "HMAC Signature",
+   "read_only": 1
+  },
+  {
+   "fieldname": "public_fingerprint",
+   "fieldtype": "Data",
+   "label": "Public Fingerprint",
+   "read_only": 1
+  },
+  {
+   "fieldname": "subscription_hash",
+   "fieldtype": "Data",
+   "label": "Subscription Hash",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_flags",
+   "fieldtype": "Section Break",
+   "label": "Entitlements",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "feature_flags",
+   "fieldtype": "Long Text",
+   "label": "Feature Flags (JSON)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "limits",
+   "fieldtype": "Long Text",
+   "label": "Limits (JSON)",
+   "read_only": 1
+  }
+ ],
+ "modified": "2026-04-14 00:00:00",
+ "modified_by": "Administrator",
+ "module": "FrothIQ Portal",
+ "name": "FrothIQ License Record",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "FrothIQ Admin",
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "FrothIQ Customer Admin"
+  }
+ ],
+ "sort_field": "issued_at",
+ "sort_order": "DESC",
+ "track_changes": 1
+}

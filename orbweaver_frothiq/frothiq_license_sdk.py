@@ -275,6 +275,148 @@ def check_rate_limits(token: dict, rpm_request: int) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Phase 3: Extended SDK functions
+# ---------------------------------------------------------------------------
+
+def get_feature_flags(token: dict) -> dict:
+    """
+    Return the full feature flags dict from a token.
+
+    FAIL CLOSED: returns empty dict for missing or invalid tokens.
+    """
+    if not isinstance(token, dict):
+        return {}
+    return dict(token.get("features", {}))
+
+
+def get_plan_limits(token: dict) -> dict:
+    """
+    Return the limits dict from a token.
+
+    FAIL CLOSED: returns empty dict for missing or invalid tokens.
+    """
+    if not isinstance(token, dict):
+        return {}
+    return dict(token.get("limits", {}))
+
+
+def check_status(token: dict) -> str:
+    """
+    Return the enforcement status of a token dict without full validation.
+
+    Returns: 'full_enforcement' | 'monitor_only' | 'quarantine' | 'unknown'
+
+    This is a LIGHTWEIGHT check — it does NOT verify the HMAC signature.
+    Use validate_license_token() for full cryptographic validation.
+    FAIL CLOSED: returns 'quarantine' for missing or unparseable tokens.
+    """
+    if not isinstance(token, dict) or not token:
+        return "quarantine"
+    try:
+        status = str(token.get("status", "")).lower()
+        if status in ("suspended", "revoked"):
+            return "quarantine"
+        if time.time() >= float(token.get("expires_at", 0)):
+            return "monitor_only"
+        if status in ("active", "trial"):
+            return "full_enforcement"
+        return "quarantine"
+    except Exception:
+        return "quarantine"
+
+
+def refresh_cached_license(
+    control_center_url: str,
+    tenant_id:          str,
+    agent_id:           str,
+    current_token_json: str,
+    signing_key:        bytes,
+    current_version:    int = 0,
+    timeout:            int = 10,
+) -> Optional[str]:
+    """
+    Fetch an updated license token from the FrothIQ control center.
+
+    Calls POST {control_center_url}/api/v2/license/sync and returns
+    the updated token JSON string on success, or None on failure.
+
+    The returned token must still be validated via validate_license_token()
+    before being stored locally — this function does NOT validate the
+    response token's signature.
+
+    Parameters
+    ----------
+    control_center_url  : str   Base URL of the FrothIQ control center
+    tenant_id           : str   FrothIQ tenant identifier
+    agent_id            : str   Edge plugin agent identifier
+    current_token_json  : str   The agent's current token (for authentication)
+    signing_key         : bytes HMAC signing key (used to auth the request)
+    current_version     : int   Current token version (for update detection)
+    timeout             : int   HTTP request timeout in seconds
+
+    Returns
+    -------
+    str | None — JSON string of the updated token, or None on failure
+    """
+    try:
+        import json as _json
+        import urllib.request
+        import urllib.error
+
+        url     = control_center_url.rstrip("/") + "/api/v2/license/sync"
+        payload = _json.dumps({
+            "agent_id":                agent_id,
+            "tenant_id":               tenant_id,
+            "current_license_version": current_version,
+            "token_json":              current_token_json,
+            "request_reason":          "sdk_refresh",
+        }).encode("utf-8")
+
+        req = urllib.request.Request(
+            url, data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            body = _json.loads(resp.read().decode("utf-8"))
+            token_data = body.get("license_token")
+            if token_data and isinstance(token_data, dict):
+                return _json.dumps(token_data)
+            return None
+    except Exception as exc:
+        logger.debug("refresh_cached_license: failed: %s", exc)
+        return None
+
+
+def get_enforcement_summary(result: "LicenseValidationResult") -> dict:
+    """
+    Return a structured enforcement summary from a validation result.
+
+    Suitable for passing to plugin UI layers for feature lock overlays
+    and status badge rendering.
+    """
+    return {
+        "valid":            result.valid,
+        "enforcement_mode": result.enforcement_mode,
+        "can_block":        result.can_block,
+        "can_log":          result.can_log,
+        "plan":             result.plan,
+        "tenant_id":        result.tenant_id,
+        "reason":           result.reason,
+        "feature_matrix":   {
+            "can_use_federation":   result.has_feature("federation"),
+            "can_use_campaigns":    result.has_feature("campaigns"),
+            "can_use_simulation":   result.has_feature("simulation"),
+            "can_use_defense_mesh": result.has_feature("defense_mesh"),
+            "can_use_intel_market": result.has_feature("intel_market"),
+            "can_use_policy_mesh":  result.has_feature("policy_mesh"),
+            "can_use_response_engine": result.has_feature("response_engine"),
+            "adaptive_scoring":     result.has_feature("adaptive_scoring"),
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
 # Helper functions
 # ---------------------------------------------------------------------------
 
