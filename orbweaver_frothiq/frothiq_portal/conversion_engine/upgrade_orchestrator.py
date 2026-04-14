@@ -486,10 +486,39 @@ def orchestrate(tenant, send_email: bool = True) -> dict:
         if getattr(top_event, "intensity_score", 50) >= 70:
             email_sent = send_upgrade_email(tenant, top_event)
 
-    return {
+    result = {
         "events":         [e.event_type for e in events],
         "banners_pushed": [b["event_type"] for b in banners_pushed],
         "email_sent":     email_sent,
         "routed_actions": routed_actions,
         "funnel_state":   get_upgrade_state(tenant.name),
     }
+
+    # Flywheel hook — non-breaking, fire-and-forget
+    try:
+        import sys
+        if "/opt/frothiq-core" not in sys.path:
+            sys.path.insert(0, "/opt/frothiq-core")
+        from frothiq_core.flywheel import emit_signal, SignalType, OriginSystem
+        if events:
+            emit_signal(
+                signal_type   = SignalType.UPGRADE_SHOWN,
+                origin_system = OriginSystem.CONVERSION,
+                severity      = "low",
+                confidence    = 0.8,
+                positive      = True,
+                metadata      = {"event_count": len(events), "banners": len(banners_pushed)},
+            )
+        if email_sent:
+            emit_signal(
+                signal_type   = SignalType.CONVERSION_SUCCESS,
+                origin_system = OriginSystem.CONVERSION,
+                severity      = "medium",
+                confidence    = 0.9,
+                positive      = True,
+                metadata      = {"funnel_state": result["funnel_state"]},
+            )
+    except Exception:
+        pass  # flywheel must never break conversion engine
+
+    return result
