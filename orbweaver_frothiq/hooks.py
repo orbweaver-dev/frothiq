@@ -26,11 +26,7 @@ app_license     = "Proprietary"
 
 # include js, css files in header of desk.html
 # app_include_css = "/assets/frothiq/css/frothiq.css"
-app_include_js = [
-    "/assets/orbweaver_frothiq/js/simulation_ui_extension.js",
-    "/assets/orbweaver_frothiq/js/global_defense_mesh_ui.js",
-    "/assets/orbweaver_frothiq/js/growth_monetization_ui.js",
-]
+# app_include_js — admin JS removed in Phase 5; admin UI lives in Control Center
 
 # include js, css files in header of web template
 # web_include_css = "/assets/frothiq/css/frothiq.css"
