@@ -1,31 +1,29 @@
 # Copyright (c) 2026, OrbWeaver — Proprietary
 """
-FrothIQ Flywheel — Frappe API Layer
+FrothIQ Flywheel — Frappe API Layer  (Phase 5 refactored)
 
-Exposes the Autonomous Security Intelligence Flywheel state to the Frappe
-desk UI via whitelisted methods.
+Exposes tenant-scoped Flywheel state to the Frappe portal via HTTP calls
+to frothiq-core. The previous version directly imported frothiq_core.flywheel
+modules — that coupling is removed as part of the Phase 5 architectural
+boundary enforcement.
 
-Plan gating:
-  free       — current state only (24h signal window filtered)
-  pro        — 7-day history + correlation heatmap
-  enterprise — full correlation matrix + reinforcement vectors + export
+BOUNDARY CONTRACT: Frappe is the customer SaaS portal only. It must not
+import or execute business logic from frothiq_core. All flywheel data is
+fetched via authenticated HTTP calls to frothiq-core.
 
-Tenant isolation:
-  - get_flywheel_events() always filters to the calling tenant's signals only.
-  - Global health / correlation data is always anonymized (no tenant_id).
-  - Raw cross-tenant signals are never returned.
+Plan gating is enforced by frothiq-core (it returns plan-gated responses).
+Frappe forwards the tenant API key and trusts core's response.
 """
 
 from __future__ import annotations
 
-import sys
 import os
 
 import frappe
+import requests as _requests
 
-_FROTHIQ_CORE_PATH = "/opt/frothiq-core"
-if _FROTHIQ_CORE_PATH not in sys.path:
-    sys.path.insert(0, _FROTHIQ_CORE_PATH)
+_CORE_URL = os.getenv("FROTHIQ_CORE_URL", "http://127.0.0.1:8001")
+_TIMEOUT = 10
 
 
 # ---------------------------------------------------------------------------
@@ -33,7 +31,6 @@ if _FROTHIQ_CORE_PATH not in sys.path:
 # ---------------------------------------------------------------------------
 
 def _get_tenant():
-    """Resolve the FrothIQ Tenant for the current user. Raises 403 if none."""
     user = frappe.session.user
     name = frappe.db.get_value("FrothIQ Tenant", {"account_owner": user}, "name")
     if not name:
@@ -41,213 +38,76 @@ def _get_tenant():
     return frappe.get_doc("FrothIQ Tenant", name)
 
 
-def _get_plan(tenant=None) -> str:
-    if tenant is None:
-        tenant = _get_tenant()
-    return (tenant.plan or "free").lower()
+def _tenant_headers(tenant) -> dict:
+    """Build auth headers for frothiq-core API calls scoped to this tenant."""
+    key = frappe.db.get_value(
+        "FrothIQ API Key",
+        {"tenant": tenant.name, "is_active": 1},
+        "api_key",
+    ) or ""
+    return {"X-FrothIQ-Key": key, "Content-Type": "application/json"}
 
 
-def _plan_allows(plan: str, required: str) -> bool:
-    order = ["free", "pro", "enterprise"]
-    try:
-        return order.index(plan) >= order.index(required)
-    except ValueError:
-        return False
-
-
-def _get_flywheel():
-    """Lazy import of flywheel module — never fails if core is unreachable."""
-    from frothiq_core.flywheel import flywheel_state_store, reinforcement_engine, correlation_engine
-    return flywheel_state_store, reinforcement_engine, correlation_engine
+def _core_get(path: str, tenant) -> dict:
+    resp = _requests.get(
+        f"{_CORE_URL}{path}",
+        headers=_tenant_headers(tenant),
+        timeout=_TIMEOUT,
+    )
+    resp.raise_for_status()
+    return resp.json()
 
 
 # ---------------------------------------------------------------------------
-# Whitelisted endpoints
+# Whitelisted endpoints — all data from frothiq-core via HTTP
 # ---------------------------------------------------------------------------
 
 @frappe.whitelist()
 def get_flywheel_state():
-    """
-    Return global system health, subsystem momentum, and instability index.
-
-    Available to all plans. Free plan gets current state only (no history).
-
-    Response:
-    {
-      "global_health_score": float,
-      "system_momentum":     {system: float, ...},
-      "instability_index":   float,
-      "drift_alerts":        [str, ...],
-      "plan":                str,
-      "last_updated":        float | null,
-    }
-    """
+    """Return global Flywheel state for the calling tenant from frothiq-core."""
     tenant = _get_tenant()
-    plan   = _get_plan(tenant)
-
     try:
-        state_store, _, _ = _get_flywheel()
-        state = state_store.get_state()
-        return {
-            "global_health_score": state.get("global_health_score", 75.0),
-            "system_momentum":     state.get("system_momentum", {}),
-            "instability_index":   state.get("instability_index", 0.0),
-            "drift_alerts":        state.get("drift_alerts", []),
-            "plan":                plan,
-            "last_updated":        state.get("last_updated"),
-        }
+        return _core_get("/api/v2/flywheel/state", tenant)
     except Exception as exc:
         frappe.log_error(f"flywheel_api.get_flywheel_state: {exc}", "Flywheel API")
         return {
             "global_health_score": None,
-            "system_momentum":     {},
-            "instability_index":   None,
-            "drift_alerts":        [],
-            "plan":                plan,
-            "last_updated":        None,
-            "error":               "Flywheel state unavailable",
+            "system_momentum": {},
+            "instability_index": None,
+            "drift_alerts": [],
+            "last_updated": None,
+            "error": "Flywheel state unavailable",
         }
 
 
 @frappe.whitelist()
 def get_system_reinforcement_map():
-    """
-    Return the 5-system correlation heatmap and reinforcement bias map.
-
-    Requires: pro or enterprise plan.
-    Free plan receives an upgrade prompt.
-
-    Response (pro/enterprise):
-    {
-      "heatmap": {
-        "systems": [str, ...],
-        "matrix":  [[float, ...], ...],
-        "triggers": [str, ...],
-        "anomalies": [...],
-      },
-      "bias_map":   {system: float, ...},
-      "instability_index": float,
-      "plan": str,
-    }
-    """
+    """Return correlation heatmap + reinforcement map for the calling tenant."""
     tenant = _get_tenant()
-    plan   = _get_plan(tenant)
-
-    if not _plan_allows(plan, "pro"):
-        return {
-            "access":   "upgrade_required",
-            "plan":     plan,
-            "required": "pro",
-            "message":  "Upgrade to Pro to access the system correlation heatmap.",
-        }
-
     try:
-        state_store, reinforce, corr = _get_flywheel()
-        instability = state_store.get_instability_index()
-        vector      = reinforce.compute(instability_index=instability)
-        heatmap     = corr.get_heatmap()
-
-        result = {
-            "heatmap":          heatmap,
-            "bias_map":         vector.system_bias_map,
-            "instability_index": vector.instability_index,
-            "plan":             plan,
-        }
-
-        # Enterprise: include full reinforcement vector
-        if _plan_allows(plan, "enterprise"):
-            result["reinforcement_vector"] = vector.to_dict()
-
-        return result
+        return _core_get("/api/v2/flywheel/reinforcement-map", tenant)
     except Exception as exc:
         frappe.log_error(f"flywheel_api.get_system_reinforcement_map: {exc}", "Flywheel API")
-        return {"error": "Reinforcement map unavailable", "plan": plan}
+        return {"error": "Reinforcement map unavailable"}
 
 
 @frappe.whitelist()
 def get_flywheel_events(limit: int = 100):
-    """
-    Return normalized FlywheelSignal history for the calling tenant.
-
-    Signals are always filtered to the calling tenant's own data — no
-    cross-tenant signal leakage.
-
-    Plan gating:
-      free:       last 24h only (by timestamp_bucket)
-      pro:        7-day window
-      enterprise: full history (up to limit)
-
-    Response:
-    {
-      "events": [{
-        "ts": int,
-        "type": str,
-        "origin": str,
-        "delta": float,
-        "severity": str,
-      }, ...],
-      "plan": str,
-      "window_hours": int,
-    }
-    """
-    tenant    = _get_tenant()
-    plan      = _get_plan(tenant)
-    limit     = min(int(limit), 1000)
-
-    window_map = {"free": 24, "pro": 168, "enterprise": 8760}
-    window_h   = window_map.get(plan, 24)
-
+    """Return normalized Flywheel signal history for the calling tenant."""
+    tenant = _get_tenant()
     try:
-        import time, math
-        state_store, _, _ = _get_flywheel()
-        cutoff_bucket = int(math.floor((time.time() - window_h * 3600) / 3600)) * 3600
-
-        # get_recent_signals filters by tenant_id and strips cross-tenant data
-        all_events = state_store.get_recent_signals(limit=limit, tenant_id=tenant.name)
-        # Apply window filter
-        filtered = [e for e in all_events if e.get("ts", 0) >= cutoff_bucket]
-
-        return {
-            "events":       filtered[:limit],
-            "plan":         plan,
-            "window_hours": window_h,
-        }
+        return _core_get(f"/api/v2/flywheel/events?limit={min(int(limit), 1000)}", tenant)
     except Exception as exc:
         frappe.log_error(f"flywheel_api.get_flywheel_events: {exc}", "Flywheel API")
-        return {"events": [], "plan": plan, "window_hours": window_h, "error": "Events unavailable"}
+        return {"events": [], "error": "Events unavailable"}
 
 
 @frappe.whitelist()
 def get_optimization_suggestions():
-    """
-    Return prioritized optimization suggestions from the reinforcement engine.
-
-    Available to all plans. Free plan receives max 2 suggestions.
-    Pro/Enterprise receive the full suggestion list.
-
-    Response:
-    {
-      "suggestions": [{
-        "priority": str,
-        "system":   str,
-        "action":   str,
-        "reason":   str,
-      }, ...],
-      "plan": str,
-    }
-    """
+    """Return optimization suggestions for the calling tenant from frothiq-core."""
     tenant = _get_tenant()
-    plan   = _get_plan(tenant)
-
     try:
-        state_store, _, _ = _get_flywheel()
-        suggestions = state_store.get_optimization_suggestions()
-
-        # Free plan: cap at 2 suggestions
-        if not _plan_allows(plan, "pro"):
-            suggestions = suggestions[:2]
-
-        return {"suggestions": suggestions, "plan": plan}
+        return _core_get("/api/v2/flywheel/optimization-suggestions", tenant)
     except Exception as exc:
         frappe.log_error(f"flywheel_api.get_optimization_suggestions: {exc}", "Flywheel API")
-        return {"suggestions": [], "plan": plan, "error": "Suggestions unavailable"}
+        return {"suggestions": [], "error": "Suggestions unavailable"}
