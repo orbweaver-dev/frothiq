@@ -6,7 +6,7 @@ FrothIQ Security Dashboard — backend API
 
 All methods are whitelisted and called by the dashboard page JS via frappe.call().
 Reads from FrothIQ Log, FrothIQ Blocklist, and FrothIQ Policy Decision DocTypes
-(defined in frothiq_frappe; not redefined here).
+(defined in orbweaver_frothiq_plugin; not redefined here).
 
 Also provides the realtime notifier hook called on FrothIQ Log after_insert.
 """
